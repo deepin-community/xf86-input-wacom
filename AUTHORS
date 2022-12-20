@@ -1,0 +1,22 @@
+There are a number of authors for this xf86-input-wacom project:
+
+For the authors who have contributed to the linuxwacom project, from
+which the xf86-input-wacom was originated, check the ChangeLog.
+
+For the authors who are contributing and/or contributed directly to
+this project, check the git History.
+
+Special thanks go to:
+
+John E. Joganic <jej@j-arkadia.com> for establishing linuxwacom project;
+
+Thomas Jaeger <thjaeger@gmail.com> for his continuous effort in
+supporting both the linuxwacom and the xf86-input-wacom projects;
+
+Peter Hutterer <peter.hutterer@who-t.net> for bringing the project
+back in-sync with xorg.
+
+This project is being maintained by:
+
+Ping Cheng <pingc@wacom.com>.
+
