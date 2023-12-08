@@ -22,15 +22,24 @@
 DISTCHECK_CONFIGURE_FLAGS = --with-sdkdir='$${includedir}/xorg' \
 			    --with-xorg-conf-dir='$${datadir}/X11/xorg.conf.d'
 
-SUBDIRS = conf doc src man include tools test
+SUBDIRS = conf src man include tools test
 MAINTAINERCLEANFILES = ChangeLog INSTALL
+BUILT_SOURCES = config-ver.h
+CLEANFILES = config-ver.h
 
 pkgconfigdir = $(libdir)/pkgconfig
 pkgconfig_DATA = xorg-wacom.pc
 
-EXTRA_DIST = GPL
+EXTRA_DIST = GPL \
+             version \
+             config-ver.h.in \
+             meson.build \
+             meson_options.txt \
+             autogen.sh \
+             README.md \
+             $(NULL)
 
-.PHONY: ChangeLog INSTALL
+.PHONY: ChangeLog INSTALL FORCE
 
 INSTALL:
 	$(INSTALL_CMD)
@@ -39,3 +48,9 @@ ChangeLog:
 	$(CHANGELOG_CMD)
 
 dist-hook: ChangeLog INSTALL
+
+config-ver.h: config-ver.h.in version
+	sed -e "s/@GITVERSION@/$$(cat version)/" < $< > $@
+
+version: FORCE
+	if test -x $(srcdir)/git-version-gen; then $(srcdir)/git-version-gen -u; fi

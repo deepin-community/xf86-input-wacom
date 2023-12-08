@@ -17,9 +17,7 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  */
 
-#ifdef HAVE_CONFIG_H
 #include <config.h>
-#endif
 
 #include "xf86Wacom.h"
 #include "wcmTouchFilter.h"
@@ -58,11 +56,9 @@ static void wcmFingerZoom(WacomDevicePtr priv);
  * @param[in] num     Contact number to search for
  * @return            Pointer to the associated channel, or NULL if none found
  */
-static WacomChannelPtr getContactNumber(WacomCommonPtr common, int num)
+static WacomChannelPtr getContactNumber(WacomCommonPtr common, unsigned int num)
 {
-	int i;
-
-	for (i = 0; i < MAX_CHANNELS; i++)
+	for (size_t i = 0; i < MAX_CHANNELS; i++)
 	{
 		WacomChannelPtr channel = common->wcmChannel+i;
 		WacomDeviceState state  = channel->valid.state;
@@ -70,7 +66,7 @@ static WacomChannelPtr getContactNumber(WacomCommonPtr common, int num)
 			return channel;
 	}
 
-	DBG(10, common, "Channel for contact number %d not found.\n", num);
+	DBG(10, common, "Channel for contact number %u not found.\n", num);
 	return NULL;
 }
 
@@ -83,15 +79,14 @@ static WacomChannelPtr getContactNumber(WacomCommonPtr common, int num)
  * @param[in]  num     Length of states list
  * @param[in]  age     Age of state information, zero being the most-current
  */
-static void getStateHistory(WacomCommonPtr common, WacomDeviceState states[], int num, int age)
+static void getStateHistory(WacomCommonPtr common, WacomDeviceState states[], unsigned int num, unsigned int age)
 {
-	int i;
-	for (i = 0; i < num; i++)
+	for (unsigned int i = 0; i < num; i++)
 	{
 		WacomChannelPtr channel = getContactNumber(common, i);
 		if (channel == NULL || i > ARRAY_SIZE(channel->valid.states))
 		{
-			DBG(7, common, "Could not get state history for contact %d, age %d.\n", i, age);
+			DBG(7, common, "Could not get state history for contact %u, age %u.\n", i, age);
 			continue;
 		}
 		states[i] = channel->valid.states[age];
@@ -111,16 +106,11 @@ static void getStateHistory(WacomCommonPtr common, WacomDeviceState states[], in
 static void
 wcmSendTouchEvent(WacomDevicePtr priv, WacomChannelPtr channel, Bool no_update)
 {
-#if GET_ABI_MAJOR(ABI_XINPUT_VERSION) >= 16
-	ValuatorMask *mask = priv->common->touch_mask;
 	WacomDeviceState state = channel->valid.state;
 	WacomDeviceState oldstate = channel->valid.states[1];
 	int type = -1;
 
-	wcmRotateAndScaleCoordinates (priv->pInfo, &state.x, &state.y);
-
-	valuator_mask_set(mask, 0, state.x);
-	valuator_mask_set(mask, 1, state.y);
+	wcmRotateAndScaleCoordinates (priv, &state.x, &state.y);
 
 	if (!state.proximity) {
 		DBG(6, priv->common, "This is a touch end event\n");
@@ -135,8 +125,7 @@ wcmSendTouchEvent(WacomDevicePtr priv, WacomChannelPtr channel, Bool no_update)
 		type = XI_TouchUpdate;
 	}
 
-	xf86PostTouchEvent(priv->pInfo->dev, state.serial_num - 1, type, 0, mask);
-#endif
+	wcmEmitTouch(priv, type, state.serial_num - 1, state.x, state.y);
 }
 
 /**
@@ -149,20 +138,11 @@ wcmSendTouchEvent(WacomDevicePtr priv, WacomChannelPtr channel, Bool no_update)
  * @param[in] contact_id  ID of the contact to send event for (at minimum)
  */
 static void
-wcmFingerMultitouch(WacomDevicePtr priv, int contact_id) {
+wcmFingerMultitouch(WacomDevicePtr priv, unsigned int contact_id) {
 	Bool lag_mode = priv->common->wcmGestureMode == GESTURE_LAG_MODE;
 	Bool prox = FALSE;
-	int i;
 
-	if (lag_mode && TabletHasFeature(priv->common, WCM_LCD)) {
-		/* wcmSingleFingerPress triggers a button press as
-		 * soon as a single finger appears. ensure we release
-		 * that button before getting too far along
-		 */
-		wcmSendButtonClick(priv, 1, 0);
-	}
-
-	for (i = 0; i < MAX_CHANNELS; i++) {
+	for (size_t i = 0; i < MAX_CHANNELS; i++) {
 		WacomChannelPtr channel = priv->common->wcmChannel+i;
 		WacomDeviceState state  = channel->valid.state;
 		if (state.device_type != TOUCH_ID)
@@ -189,28 +169,44 @@ static double touchDistance(WacomDeviceState ds0, WacomDeviceState ds1)
 	return distance;
 }
 
+static Bool vectorsSameDirection(WacomCommonPtr common, WacomDeviceState ds00,
+		WacomDeviceState ds01, WacomDeviceState ds10, WacomDeviceState ds11)
+{
+	float dx0 = ds01.x - ds00.x;
+	float dy0 = ds01.y - ds00.y;
+	float m0 = sqrt(dx0*dx0 + dy0*dy0);
+	float dx1 = ds11.x - ds10.x;
+	float dy1 = ds11.y - ds10.y;
+	float m1 = sqrt(dx1*dx1 + dy1*dy1);
+
+	float dot = (dx0/m0 * dx1/m1) + (dy0/m0 * dy1/m1);
+	float angle = acos(dot);
+
+	return angle < (3.141592f / 2);
+}
+
 static Bool pointsInLine(WacomCommonPtr common, WacomDeviceState ds0,
 		WacomDeviceState ds1)
 {
 	Bool ret = FALSE;
 	Bool rotated = common->wcmRotate == ROTATE_CW ||
 			common->wcmRotate == ROTATE_CCW;
-	int horizon_rotated = (rotated) ?
+	unsigned int horizon_rotated = (rotated) ?
 			WACOM_HORIZ_ALLOWED : WACOM_VERT_ALLOWED;
-	int vertical_rotated = (rotated) ?
+	unsigned int vertical_rotated = (rotated) ?
 			WACOM_VERT_ALLOWED : WACOM_HORIZ_ALLOWED;
-	int max_spread = common->wcmGestureParameters.wcmMaxScrollFingerSpread;
+	unsigned int scroll_threshold = common->wcmGestureParameters.wcmScrollDistance;
+	unsigned int dx = abs(ds0.x - ds1.x);
+	unsigned int dy = abs(ds0.y - ds1.y);
 
 	if (!common->wcmGestureParameters.wcmScrollDirection)
 	{
-		if ((abs(ds0.x - ds1.x) < max_spread) &&
-			(abs(ds0.y - ds1.y) > max_spread))
+		if (dx < scroll_threshold && dy > scroll_threshold)
 		{
 			common->wcmGestureParameters.wcmScrollDirection = horizon_rotated;
 			ret = TRUE;
 		}
-		if ((abs(ds0.y - ds1.y) < max_spread) &&
-			(abs(ds0.x - ds1.x) > max_spread))
+		if (dy < scroll_threshold && dx > scroll_threshold)
 		{
 			common->wcmGestureParameters.wcmScrollDirection = vertical_rotated;
 			ret = TRUE;
@@ -218,12 +214,12 @@ static Bool pointsInLine(WacomCommonPtr common, WacomDeviceState ds0,
 	}
 	else if (common->wcmGestureParameters.wcmScrollDirection == vertical_rotated)
 	{
-		if (abs(ds0.y - ds1.y) < max_spread)
+		if (dy < scroll_threshold)
 			ret = TRUE;
 	}
 	else if (common->wcmGestureParameters.wcmScrollDirection == horizon_rotated)
 	{
-		if (abs(ds0.x - ds1.x) < max_spread)
+		if (dx < scroll_threshold)
 			ret = TRUE;
 	}
 	return ret;
@@ -232,11 +228,11 @@ static Bool pointsInLine(WacomCommonPtr common, WacomDeviceState ds0,
 /* send a button event */
 static void wcmSendButtonClick(WacomDevicePtr priv, int button, int state)
 {
-	int mode = is_absolute(priv->pInfo);
+	int mode = is_absolute(priv);
+	WacomAxisData axes = {0};
 
 	/* send button event in state */
-	xf86PostButtonEventP(priv->pInfo->dev, mode,button,
-		state,0,0,0);
+	wcmEmitButton(priv, mode, button, state, &axes);
 
 	/* We have changed the button state (from down to up) for the device
 	 * so we need to update the record */
@@ -263,7 +259,7 @@ static void wcmFingerTapToClick(WacomDevicePtr priv)
 
 	/* process second finger tap if matched */
 	if ((ds[0].sample < ds[1].sample) &&
-	    ((GetTimeInMillis() -
+	    ((wcmTimeInMillis() -
 	    dsLast[1].sample) <= common->wcmGestureParameters.wcmTapTime) &&
 	    !ds[1].proximity && dsLast[1].proximity)
 	{
@@ -279,7 +275,7 @@ static void wcmFingerTapToClick(WacomDevicePtr priv)
 	}
 }
 
-static CARD32 wcmSingleFingerTapTimer(OsTimerPtr timer, CARD32 time, pointer arg)
+static uint32_t wcmSingleFingerTapTimer(WacomTimerPtr timer, uint32_t time, pointer arg)
 {
 	WacomDevicePtr priv = (WacomDevicePtr)arg;
 	WacomCommonPtr common = priv->common;
@@ -335,7 +331,8 @@ static void wcmSingleFingerTap(WacomDevicePtr priv)
 			common->wcmGestureMode = GESTURE_PREDRAG_MODE;
 
 			/* Delay to detect possible drag operation */
-			TimerSet(priv->tap_timer, 0, common->wcmGestureParameters.wcmTapTime, wcmSingleFingerTapTimer, priv);
+			wcmTimerSet(priv->tap_timer, common->wcmGestureParameters.wcmTapTime,
+				    wcmSingleFingerTapTimer, priv);
 		}
 	}
 }
@@ -378,9 +375,8 @@ static void wcmSingleFingerPress(WacomDevicePtr priv)
  * Cancel any in-progress gesture, returning to GESTURE_NONE_MODE until new
  * fingers enter proximity.
  */
-void wcmCancelGesture(InputInfoPtr pInfo)
+void wcmCancelGesture(WacomDevicePtr priv)
 {
-	WacomDevicePtr priv = pInfo->private;
 	WacomCommonPtr common = priv->common;
 
 	if (!IsTouch(priv))
@@ -392,7 +388,7 @@ void wcmCancelGesture(InputInfoPtr pInfo)
 }
 
 /* parsing gesture mode according to 2FGT data */
-void wcmGestureFilter(WacomDevicePtr priv, int touch_id)
+void wcmGestureFilter(WacomDevicePtr priv, unsigned int touch_id)
 {
 	WacomCommonPtr common = priv->common;
 	WacomDeviceState ds[2] = {}, dsLast[2] = {};
@@ -405,10 +401,34 @@ void wcmGestureFilter(WacomDevicePtr priv, int touch_id)
 	if (!IsTouch(priv))
 	{
 		/* this should never happen */
-		LogMessageVerbSigSafe(X_ERROR, 0, "WACOM: No touch device found for %s \n",
+		wcmLogSafe(priv, W_ERROR, "WACOM: No touch device found for %s \n",
 			 common->device_path);
 		return;
 	}
+
+	/* Send multitouch data to X if appropriate */
+	if (!common->wcmGesture) {
+		switch (common->wcmGestureMode) {
+		case GESTURE_CANCEL_MODE:
+			break;
+		case GESTURE_NONE_MODE:
+			if (TabletHasFeature(common, WCM_LCD))
+				common->wcmGestureMode = GESTURE_MULTITOUCH_MODE;
+			else if (ds[1].proximity)
+				common->wcmGestureMode = GESTURE_LAG_MODE;
+			_fallthrough_;
+		case GESTURE_LAG_MODE:
+		case GESTURE_MULTITOUCH_MODE:
+			if (common->wcmGestureMode != GESTURE_NONE_MODE)
+				wcmFingerMultitouch(priv, touch_id);
+			break;
+		default:
+			wcmCancelGesture(priv);
+			break;
+		}
+	}
+	if (common->wcmGestureMode == GESTURE_MULTITOUCH_MODE)
+		return;
 
 	/* Do not process gestures while in CANCEL mode. Only reset back to
 	 * NONE mode once all fingers have left the screen.
@@ -421,9 +441,6 @@ void wcmGestureFilter(WacomDevicePtr priv, int touch_id)
 			common->wcmGestureMode = GESTURE_NONE_MODE;
 	}
 
-	if (common->wcmGestureMode == GESTURE_MULTITOUCH_MODE)
-		goto ret;
-
 	/* When 2 fingers are in proximity, it must always be in one of
 	 * the valid 2 fingers modes: LAG, SCROLL, or ZOOM.
 	 * LAG mode is used while deciding between SCROLL and ZOOM and
@@ -434,6 +451,14 @@ void wcmGestureFilter(WacomDevicePtr priv, int touch_id)
 	{
 		if (common->wcmGestureMode == GESTURE_NONE_MODE)
 			common->wcmGestureMode = GESTURE_LAG_MODE;
+	}
+	/* If we're in a multitouch mode but two fingers aren't in proximity
+	 * we should directly head to CANCEL mode and wait for both fingers
+	 * to leave the screen.
+	 */
+	else if (common->wcmGestureMode & (GESTURE_SCROLL_MODE | GESTURE_ZOOM_MODE))
+	{
+		common->wcmGestureMode = GESTURE_CANCEL_MODE;
 	}
 	/* When only 1 finger is in proximity, it can be in either LAG mode,
 	 * NONE mode or DRAG mode.
@@ -449,7 +474,7 @@ void wcmGestureFilter(WacomDevicePtr priv, int touch_id)
 	 */
 	else if (dsLast[0].proximity && common->wcmGestureMode != GESTURE_DRAG_MODE)
 	{
-		CARD32 ms = GetTimeInMillis();
+		CARD32 ms = wcmTimeInMillis();
 
 		if ((ms - ds[0].sample) < WACOM_GESTURE_LAG_TIME)
 		{
@@ -504,7 +529,7 @@ void wcmGestureFilter(WacomDevicePtr priv, int touch_id)
 		if (!dsLast[0].proximity &&
 		    common->wcmGestureMode != GESTURE_NONE_MODE)
 			/* send first finger out prox */
-			wcmSoftOutEvent(priv->pInfo);
+			wcmSoftOutEvent(priv);
 
 		/* if were in DRAG mode, send left button up now */
 		if (common->wcmGestureMode == GESTURE_DRAG_MODE)
@@ -524,28 +549,18 @@ void wcmGestureFilter(WacomDevicePtr priv, int touch_id)
 	if (common->wcmGestureMode & GESTURE_TAP_MODE)
 		goto ret;
 
-	/* skip initial finger event for scroll and zoom */
-	if (!dsLast[0].proximity || !dsLast[1].proximity)
-		goto ret;
-
-	/* was in zoom mode no time check needed */
-	if ((common->wcmGestureMode & GESTURE_ZOOM_MODE) &&
-	    ds[0].proximity && ds[1].proximity)
+	/* continue zooming if already in zoom mode */
+	if ((common->wcmGestureMode & GESTURE_ZOOM_MODE))
 		wcmFingerZoom(priv);
 
-	/* was in scroll mode no time check needed */
+	/* continue scrollling if already in scroll mode */
 	else if (common->wcmGestureMode & GESTURE_SCROLL_MODE)
-		    wcmFingerScroll(priv);
+		wcmFingerScroll(priv);
 
 	/* process complex two finger gestures */
-	else {
-		CARD32 ms = GetTimeInMillis();
-		int taptime = common->wcmGestureParameters.wcmTapTime;
-
-		if (ds[0].proximity && ds[1].proximity &&
-		    (taptime < (ms - ds[0].sample)) &&
-		    (taptime < (ms - ds[1].sample)))
-		{
+	else if (ds[0].proximity && ds[1].proximity)
+	{
+		if (dsLast[0].proximity && dsLast[1].proximity) {
 			/* scroll should be considered first since it requires
 			 * a finger distance check */
 			wcmFingerScroll(priv);
@@ -555,23 +570,6 @@ void wcmGestureFilter(WacomDevicePtr priv, int touch_id)
 		}
 	}
 ret:
-
-#if GET_ABI_MAJOR(ABI_XINPUT_VERSION) >= 16
-	/* Send multitouch data to X if appropriate */
-	if (!common->wcmGesture) {
-		if (common->wcmGestureMode == GESTURE_NONE_MODE) {
-			if (TabletHasFeature(common, WCM_LCD))
-				common->wcmGestureMode = GESTURE_MULTITOUCH_MODE;
-			else if (ds[1].proximity)
-				common->wcmGestureMode = GESTURE_LAG_MODE;
-		}
-
-		if (common->wcmGestureMode == GESTURE_LAG_MODE ||
-		    common->wcmGestureMode == GESTURE_MULTITOUCH_MODE)
-			wcmFingerMultitouch(priv, touch_id);
-	}
-#endif
-
 	if ((common->wcmGestureMode == GESTURE_NONE_MODE || common->wcmGestureMode == GESTURE_DRAG_MODE) &&
 	    touch_id == 0)
 	{
@@ -585,8 +583,8 @@ static void wcmSendScrollEvent(WacomDevicePtr priv, int dist,
 {
 	int button = (dist > 0) ? buttonUp : buttonDn;
 	WacomCommonPtr common = priv->common;
-	int count = (int)((1.0 * abs(dist)/
-		common->wcmGestureParameters.wcmScrollDistance) + 0.5);
+	unsigned int count = (unsigned int)((1.0 * abs(dist)/
+		common->wcmGestureParameters.wcmScrollDistance));
 	WacomDeviceState ds[2] = {};
 
 	getStateHistory(common, ds, ARRAY_SIZE(ds), 0);
@@ -606,7 +604,7 @@ static void wcmSendScrollEvent(WacomDevicePtr priv, int dist,
 	{
 		wcmSendButtonClick(priv, button, 1);
 		wcmSendButtonClick(priv, button, 0);
-		DBG(10, priv, "loop count = %d \n", count);
+		DBG(10, priv, "loop count = %u \n", count);
 	}
 }
 
@@ -614,12 +612,13 @@ static void wcmFingerScroll(WacomDevicePtr priv)
 {
 	WacomCommonPtr common = priv->common;
 	WacomDeviceState ds[2] = {};
+	WacomDeviceState *start = common->wcmGestureState;
 	int midPoint_new = 0;
 	int midPoint_old = 0;
-	int i = 0, dist = 0;
+	int dist = 0;
 	WacomFilterState filterd;  /* borrow this struct */
-	int max_spread = common->wcmGestureParameters.wcmMaxScrollFingerSpread;
-	int gestureStart = 0;
+	int max_spread = common->wcmGestureParameters.wcmZoomDistance;
+	int spread;
 
 	if (!common->wcmGesture)
 		return;
@@ -628,23 +627,23 @@ static void wcmFingerScroll(WacomDevicePtr priv)
 
 	DBG(10, priv, "\n");
 
+	spread = fabs(touchDistance(ds[0], ds[1]) - touchDistance(start[0], start[1]));
+
 	if (common->wcmGestureMode != GESTURE_SCROLL_MODE)
 	{
-		if (fabs(touchDistance(ds[0], ds[1]) -
-			touchDistance(common->wcmGestureState[0],
-			common->wcmGestureState[1])) < max_spread)
+		if (spread < max_spread)
 		{
 			/* two fingers stay close to each other all the time and
 			 * move in vertical or horizontal direction together
 			 */
-			if (pointsInLine(common, ds[0], common->wcmGestureState[0])
-			    && pointsInLine(common, ds[1], common->wcmGestureState[1])
-			    && common->wcmGestureParameters.wcmScrollDirection)
+			if (pointsInLine(common, ds[0], start[0])
+			    && pointsInLine(common, ds[1], start[1])
+			    && common->wcmGestureParameters.wcmScrollDirection
+			    && vectorsSameDirection(common, ds[0], start[0], ds[1], start[1]))
 			{
 				/* left button might be down. Send it up first */
 				wcmSendButtonClick(priv, 1, 0);
 				common->wcmGestureMode = GESTURE_SCROLL_MODE;
-				gestureStart = 1;
 			}
 		}
 	}
@@ -652,13 +651,6 @@ static void wcmFingerScroll(WacomDevicePtr priv)
 	/* still not a scroll event yet? */
 	if (common->wcmGestureMode != GESTURE_SCROLL_MODE)
 		return;
-
-	/* forget history leading up to the beginning of the gesture */
-	if (gestureStart)
-	{
-		common->wcmGestureState[0] = ds[0];
-		common->wcmGestureState[1] = ds[1];
-	}
 
 	/* initialize the points so we can rotate them */
 	filterd.x[0] = ds[0].x;
@@ -671,8 +663,9 @@ static void wcmFingerScroll(WacomDevicePtr priv)
 	filterd.y[3] = common->wcmGestureState[1].y;
 
 	/* scrolling has directions so rotation has to be considered first */
-	for (i=0; i<6; i++)
-		wcmRotateAndScaleCoordinates(priv->pInfo, &filterd.x[i], &filterd.y[i]);
+	for (unsigned int i = 0; i < 6; i++) {
+		wcmRotateAndScaleCoordinates(priv, &filterd.x[i], &filterd.y[i]);
+	}
 
 	/* check vertical direction */
 	if (common->wcmGestureParameters.wcmScrollDirection == WACOM_VERT_ALLOWED)
@@ -724,10 +717,12 @@ static void wcmFingerZoom(WacomDevicePtr priv)
 {
 	WacomCommonPtr common = priv->common;
 	WacomDeviceState ds[2] = {};
-	int count, button;
-	int dist;
-	int max_spread = common->wcmGestureParameters.wcmMaxScrollFingerSpread;
-	int gestureStart = 0;
+	WacomDeviceState *start = common->wcmGestureState;
+	unsigned int count, button;
+	int dist = touchDistance(common->wcmGestureState[0],
+			common->wcmGestureState[1]);
+	int max_spread = common->wcmGestureParameters.wcmZoomDistance;
+	int spread;
 
 	if (!common->wcmGesture)
 		return;
@@ -736,36 +731,24 @@ static void wcmFingerZoom(WacomDevicePtr priv)
 
 	DBG(10, priv, "\n");
 
+	spread = fabs(touchDistance(ds[0], ds[1]) - touchDistance(start[0], start[1]));
+
 	if (common->wcmGestureMode != GESTURE_ZOOM_MODE)
 	{
 		/* two fingers moved apart from each other */
-		if (fabs(touchDistance(ds[0], ds[1]) -
-			touchDistance(common->wcmGestureState[0],
-				      common->wcmGestureState[1])) >
-			(3 * max_spread))
+		if (spread > max_spread)
 		{
 			/* left button might be down, send it up first */
 			wcmSendButtonClick(priv, 1, 0);
-
-			/* fingers moved apart more than 3 times
-			 * wcmMaxScrollFingerSpread, zoom mode is entered */
 			common->wcmGestureMode = GESTURE_ZOOM_MODE;
-			gestureStart = 1;
 		}
 	}
 
 	if (common->wcmGestureMode != GESTURE_ZOOM_MODE)
 		return;
 
-	/* forget history leading up to the beginning of the gesture */
-	if (gestureStart)
-	{
-		common->wcmGestureState[0] = ds[0];
-		common->wcmGestureState[1] = ds[1];
-	}
-
-	dist = touchDistance(ds[0], ds[1]) - touchDistance(common->wcmGestureState[0], common->wcmGestureState[1]);
-	count = (int)((1.0 * abs(dist)/common->wcmGestureParameters.wcmZoomDistance) + 0.5);
+	dist = touchDistance(ds[0], ds[1]) - dist;
+	count = (unsigned int)((1.0 * abs(dist)/common->wcmGestureParameters.wcmZoomDistance));
 
 	/* user might have changed from left to right or vice versa */
 	if (count < common->wcmGestureParameters.wcmGestureUsed)
@@ -790,10 +773,10 @@ static void wcmFingerZoom(WacomDevicePtr priv)
 	common->wcmGestureParameters.wcmGestureUsed += count;
 	while (count--)
 	{
-		wcmEmitKeycode (priv->pInfo->dev, 37 /*XK_Control_L*/, 1);
+		wcmEmitKeycode (priv, 37 /*XK_Control_L*/, 1);
 		wcmSendButtonClick (priv, button, 1);
 		wcmSendButtonClick (priv, button, 0);
-		wcmEmitKeycode (priv->pInfo->dev, 37 /*XK_Control_L*/, 0);
+		wcmEmitKeycode (priv, 37 /*XK_Control_L*/, 0);
 	}
 }
 

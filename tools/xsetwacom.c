@@ -16,9 +16,9 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  */
 
-#ifdef HAVE_CONFIG_H
 #include "config.h"
-#endif
+
+#include "config-ver.h" /* BUILD_VERSION */
 
 #include <wacom-properties.h>
 #include <wacom-util.h>
@@ -28,6 +28,7 @@
 #include <limits.h>
 #include <stdio.h>
 #include <stdarg.h>
+#include <stdbool.h>
 #include <ctype.h>
 #include <stdlib.h>
 #include <getopt.h>
@@ -45,6 +46,8 @@
 
 #define safe_realloc(p, n, s) \
 	((size_t)-1 / (n) < (s) ? NULL : realloc((p), (n)*(s)))
+
+#define EXIT_INVALID_USAGE 2
 
 static int verbose = False;
 
@@ -90,11 +93,11 @@ typedef struct _param
 	const char *desc;	/* description */
 	const char *prop_name;	/* property name */
 	const int prop_format;	/* property format */
-	const int prop_offset;	/* offset (index) into the property values */
+	const unsigned int prop_offset;	/* offset (index) into the property values */
 	const int arg_count;   /* extra number of items after first one */
 	const unsigned int prop_flags;
-	void (*set_func)(Display *dpy, XDevice *dev, struct _param *param, int argc, char **argv); /* handler function, if appropriate */
-	void (*get_func)(Display *dpy, XDevice *dev, struct _param *param, int argc, char **argv); /* handler function for getting, if appropriate */
+	int (*set_func)(Display *dpy, XDevice *dev, struct _param *param, int argc, char **argv); /* handler function, if appropriate */
+	int (*get_func)(Display *dpy, XDevice *dev, struct _param *param, int argc, char **argv); /* handler function for getting, if appropriate */
 
 	/* filled in by get() */
 	char *device_name;
@@ -103,16 +106,16 @@ typedef struct _param
 
 
 /* get_func/set_func calls for special parameters */
-static void map_actions(Display *dpy, XDevice *dev, param_t *param, int argc, char **argv);
-static void set_mode(Display *dpy, XDevice *dev, param_t *param, int argc, char **argv);
-static void get_mode(Display *dpy, XDevice *dev, param_t *param, int argc, char **argv);
-static void get_map(Display *dpy, XDevice *dev, param_t *param, int argc, char **argv);
-static void set_rotate(Display *dpy, XDevice *dev, param_t *param, int argc, char **argv);
-static void get_rotate(Display *dpy, XDevice *dev, param_t *param, int argc, char **argv);
-static void set_xydefault(Display *dpy, XDevice *dev, param_t *param, int argc, char **argv);
-static void get_all(Display *dpy, XDevice *dev, param_t *param, int argc, char **argv);
-static void get_param(Display *dpy, XDevice *dev, param_t *param, int argc, char **argv);
-static void set_output(Display *dpy, XDevice *dev, param_t *param, int argc, char **argv);
+static int map_actions(Display *dpy, XDevice *dev, param_t *param, int argc, char **argv);
+static int set_mode(Display *dpy, XDevice *dev, param_t *param, int argc, char **argv);
+static int get_mode(Display *dpy, XDevice *dev, param_t *param, int argc, char **argv);
+static int get_map(Display *dpy, XDevice *dev, param_t *param, int argc, char **argv);
+static int set_rotate(Display *dpy, XDevice *dev, param_t *param, int argc, char **argv);
+static int get_rotate(Display *dpy, XDevice *dev, param_t *param, int argc, char **argv);
+static int set_xydefault(Display *dpy, XDevice *dev, param_t *param, int argc, char **argv);
+static int get_all(Display *dpy, XDevice *dev, param_t *param, int argc, char **argv);
+static int get_param(Display *dpy, XDevice *dev, param_t *param, int argc, char **argv);
+static int set_output(Display *dpy, XDevice *dev, param_t *param, int argc, char **argv);
 
 /* NOTE: When removing or changing a parameter name, add to
  * deprecated_parameters.
@@ -472,6 +475,15 @@ static param_t parameters[] =
 		.prop_flags = PROP_FLAG_BOOLEAN
 	},
 	{
+		.name = "PanScrollThreshold",
+		.x11name = "PanScrollThreshold",
+		.desc = "Adjusts distance required for pan actions to generate a scroll event",
+		.prop_name = WACOM_PROP_PANSCROLL_THRESHOLD,
+		.prop_format = 32,
+		.prop_offset = 0,
+		.arg_count = 1,
+	},
+	{
 		.name = "MapToOutput",
 		.desc = "Map the device to the given output. ",
 		.set_func = set_output,
@@ -484,7 +496,7 @@ static param_t parameters[] =
 		.get_func = get_all,
 		.prop_flags = PROP_FLAG_READONLY,
 	},
-	{}
+	{.name = NULL}
 };
 
 /**
@@ -504,7 +516,7 @@ static struct deprecated
 	{"GetTabletID", "TabletID"},
 	{"DebugLevel",	"ToolDebugLevel"},
 	{"CommonDBG",	"TabletDebugLevel"},
-	{"GetTabletID",	"TabletID"},
+	{"Serial",	"BindToSerial"},
 	{"PressCurve",	"PressureCurve"},
 	{"TPCButton",	"TabletPCButton"},
 	{"CursorProx",	"CursorProximity"},
@@ -580,6 +592,8 @@ static struct modifier modifiers[] = {
 	{"hyper", "Hyper_L"},
 	{"lhyper", "Hyper_L"},
 	{"rhyper", "Hyper_R"},
+
+	{"altgr", "ISO_Level3_Shift"},
 
 	{ NULL, NULL }
 };
@@ -751,8 +765,7 @@ static void usage(void)
 
 static void version(void)
 {
-	printf("%d.%d.%d\n", PACKAGE_VERSION_MAJOR, PACKAGE_VERSION_MINOR,
-			     PACKAGE_VERSION_PATCHLEVEL);
+	printf(BUILD_VERSION "\n");
 }
 
 static XDevice* find_device(Display *display, char *name)
@@ -781,7 +794,7 @@ static XDevice* find_device(Display *display, char *name)
 
 	for(i = 0; i < num_devices; i++)
 	{
-		TRACE("Checking device '%s' (%ld).\n", devices[i].name, devices[i].id);
+		TRACE("Checking device '%s' (%lu).\n", devices[i].name, devices[i].id);
 
 		if (((devices[i].use >= IsXExtensionDevice)) &&
 			((!is_id && strcmp(devices[i].name, name) == 0) ||
@@ -801,7 +814,7 @@ static XDevice* find_device(Display *display, char *name)
 
 	if (found)
 	{
-		TRACE("Device '%s' (%ld) found.\n", found->name, found->id);
+		TRACE("Device '%s' (%lu) found.\n", found->name, found->id);
 		dev = XOpenDevice(display, found->id);
 	}
 
@@ -838,7 +851,7 @@ static Bool test_property(Display *dpy, XDevice* dev, Atom prop)
 
 static void list_one_device(Display *dpy, XDeviceInfo *info)
 {
-	static int	wacom_prop = 0;
+	static unsigned int wacom_prop = 0;
 	int		natoms;
 	Atom		*atoms;
 	XDevice		*dev;
@@ -873,14 +886,14 @@ static void list_one_device(Display *dpy, XDeviceInfo *info)
 			if (nitems)
 			{
 				type_name = XGetAtomName(dpy, *(Atom*)data);
-				printf("%-32s	id: %ld	type: %-10s\n",
+				printf("%-32s	id: %lu	type: %-10s\n",
 						info->name, info->id,
 						type_name);
 			}
 
 			XFree(data);
 		} else {
-			TRACE("'%s' (%ld) is not a wacom device.\n", info->name, info->id);
+			TRACE("'%s' (%lu) is not a wacom device.\n", info->name, info->id);
 		}
 
 		XFree(atoms);
@@ -908,7 +921,7 @@ static void list_devices(Display *dpy)
 		if (info[i].use == IsXPointer || info[i].use == IsXKeyboard)
 			continue;
 
-		TRACE("Found device '%s' (%ld).\n", info[i].name, info[i].id);
+		TRACE("Found device '%s' (%lu).\n", info[i].name, info[i].id);
 		list_one_device(dpy, &info[i]);
 	}
 
@@ -931,11 +944,11 @@ static void list_mod(Display *dpy)
 {
 	struct modifier *m = modifiers;
 
-	printf("%zd modifiers are supported:\n", ARRAY_SIZE(modifiers) - 1);
+	printf("%zu modifiers are supported:\n", ARRAY_SIZE(modifiers) - 1);
 	while(m->name)
 		printf("	%s\n", m++->name);
 
-	printf("\n%zd specialkeys are supported:\n", ARRAY_SIZE(specialkeys) - 1);
+	printf("\n%zu specialkeys are supported:\n", ARRAY_SIZE(specialkeys) - 1);
 	m = specialkeys;
 	while(m->name)
 		printf("	%s\n", m++->name);
@@ -944,7 +957,7 @@ static void list_mod(Display *dpy)
 		" See the man page for details.\n");
 }
 
-static void list(Display *dpy, int argc, char **argv)
+static int list(Display *dpy, int argc, char **argv)
 {
 	TRACE("'list' requested.\n");
 	if (argc == 0)
@@ -958,8 +971,11 @@ static void list(Display *dpy, int argc, char **argv)
 	else if (strcmp(argv[0], "mod") == 0 ||
 		 strcmp(argv[0], "modifiers") == 0)
 		list_mod(dpy);
-	else
+	else {
 		fprintf(stderr, "unknown argument to list.\n");
+		return EXIT_INVALID_USAGE;
+	}
+	return EXIT_SUCCESS;
 }
 
 /**
@@ -983,7 +999,7 @@ static const char *convert_specialkey(const char *specialkey)
 			m++;
 	}
 
-	return m->converted ? m->converted : (char*)specialkey;
+	return m->converted ? m->converted : specialkey;
 }
 
 /**
@@ -1010,6 +1026,7 @@ static int special_map_button(Display *dpy, int argc, char **argv, unsigned long
 static int special_map_core(Display *dpy, int argc, char **argv, unsigned long *ndata, unsigned long *data, const size_t size);
 static int special_map_modetoggle(Display *dpy, int argc, char **argv, unsigned long *ndata, unsigned long *data, const size_t size);
 static int special_map_displaytoggle(Display *dpy, int argc, char **argv, unsigned long *ndata, unsigned long *data, const size_t size);
+static int special_map_panscroll(Display *dpy, int argc, char **argv, unsigned long *ndata, unsigned long *data, const size_t size);
 
 /* Valid keywords for the --set ButtonX options */
 static struct keywords {
@@ -1021,6 +1038,7 @@ static struct keywords {
 	{"core", special_map_core},
 	{"modetoggle", special_map_modetoggle},
 	{"displaytoggle", special_map_displaytoggle},
+	{"pan", special_map_panscroll},
 	{ NULL, NULL }
 };
 
@@ -1062,6 +1080,19 @@ static int special_map_displaytoggle(Display *dpy, int argc, char **argv, unsign
 			"anymore and will be ignored.\n");
 		once_only = 0;
 	}
+	return 0;
+}
+
+static int special_map_panscroll(Display *dpy, int argc, char **argv, unsigned long *ndata, unsigned long *data, const size_t size)
+{
+	if (*ndata + 1 > size) {
+		fprintf(stderr, "Insufficient space to store all commands.\n");
+		return 0;
+	}
+	data[*ndata] = AC_PANSCROLL;
+
+	*ndata += 1;
+
 	return 0;
 }
 
@@ -1274,7 +1305,7 @@ static int special_map_keystrokes(Display *dpy, int argc, char **argv, unsigned 
 		if (need_release)
 			data[*ndata + nitems++] = AC_KEY | kc;
 
-		TRACE("Key map %ld (%d, '%s') [%s,%s]\n", ks, kc,
+		TRACE("Key map %lu (%d, '%s') [%s,%s]\n", ks, kc,
 				XKeysymToString(ks),
 				need_press ?  "press" : "",
 				need_release ?  "release" : "");
@@ -1341,14 +1372,14 @@ static Bool parse_actions(Display *dpy, int argc, char **argv, unsigned long* da
 	int  nwords = 0;
 	char **words = NULL;
 	int n;
-	
+
 	/* translate cmdline commands */
 	words = strjoinsplit(argc, argv, &nwords);
 
 	if (nwords==1 && sscanf(words[0], "%d", &n) == 1)
 	{ /* Mangle "simple" button maps into proper actions */
 		char *nargv[1];
-		
+
 		for (i =  0; i < nwords; i++)
 			free(words[i]);
 		free(words);
@@ -1364,19 +1395,22 @@ static Bool parse_actions(Display *dpy, int argc, char **argv, unsigned long* da
 
 		while (keywords[j].keyword && i < nwords && *nitems < size)
 		{
-			int parsed = 0;
 			if (strcasecmp(words[i], keywords[j].keyword) == 0)
 			{
-				parsed = keywords[j].func(dpy, nwords - i - 1,
+				int parsed = keywords[j].func(dpy, nwords - i - 1,
 							  &words[i + 1],
 							  nitems, data, size);
 				i += parsed;
 				keyword_found = 1;
+
+				if (parsed)
+				{
+					/* restart with first keyword */
+					j = 0;
+					continue;
+				}
 			}
-			if (parsed)
-				j = parsed = 0; /* restart with first keyword */
-			else
-				j++;
+			j++;
 		}
 
 		if (!keyword_found)
@@ -1413,17 +1447,20 @@ static Bool parse_actions(Display *dpy, int argc, char **argv, unsigned long* da
  * @param  argc        Number of command line arguments we've been passed
  * @param  argv        Command line arguments we need to parse
  */
-static void special_map_property(Display *dpy, XDevice *dev, Atom btnact_prop, int offset, int argc, char **argv)
+static int special_map_property(Display *dpy, XDevice *dev, Atom btnact_prop, unsigned int offset, int argc, char **argv)
 {
 	unsigned long *data, *btnact_data;
 	Atom type, prop = 0;
 	int format;
 	unsigned long btnact_nitems, bytes_after;
 	unsigned long nitems = 0;
+	int status = EXIT_SUCCESS;
 
 	data = calloc(256, sizeof(unsigned long));
-	if (!parse_actions(dpy, argc, argv, data, &nitems, 256))
+	if (!parse_actions(dpy, argc, argv, data, &nitems, 256)) {
+		status = EXIT_FAILURE;
 		goto out;
+	}
 
 	/* obtain the button actions Atom */
 	XGetDeviceProperty(dpy, dev, btnact_prop, 0, 100, False,
@@ -1433,6 +1470,7 @@ static void special_map_property(Display *dpy, XDevice *dev, Atom btnact_prop, i
 	if (offset >= btnact_nitems)
 	{
 		fprintf(stderr, "Invalid offset into %s property.\n", XGetAtomName(dpy, btnact_prop));
+		status = EXIT_INVALID_USAGE;
 		goto out2;
 	}
 
@@ -1440,6 +1478,7 @@ static void special_map_property(Display *dpy, XDevice *dev, Atom btnact_prop, i
 	{
 		fprintf(stderr, "Property '%s' in an unexpected format. This is a bug.\n",
 		        XGetAtomName(dpy, btnact_prop));
+		status = EXIT_FAILURE;
 		goto out2;
 	}
 
@@ -1454,6 +1493,7 @@ static void special_map_property(Display *dpy, XDevice *dev, Atom btnact_prop, i
 		 */
 		fprintf(stderr, "Unsupported offset into '%s' property.\n",
 			XGetAtomName(dpy, btnact_prop));
+		status = EXIT_INVALID_USAGE;
 		goto out2;
 	}
 
@@ -1485,6 +1525,7 @@ out2:
 	XFree(btnact_data);
 out:
 	free(data);
+	return status;
 }
 
 /**
@@ -1503,32 +1544,32 @@ out:
  * @param argc  Size of argv
  * @param argv  Arguments to parse
  */
-static void map_actions(Display *dpy, XDevice *dev, param_t* param, int argc, char **argv)
+static int map_actions(Display *dpy, XDevice *dev, param_t* param, int argc, char **argv)
 {
 	Atom action_prop;
-	int offset = param->prop_offset;
+	unsigned int offset = param->prop_offset;
 
-	TRACE("Mapping %s for device %ld.\n", param->name, dev->device_id);
+	TRACE("Mapping %s for device %lu.\n", param->name, dev->device_id);
 
 	action_prop = XInternAtom(dpy, param->prop_name, True);
 	if (!action_prop)
 	{
 		fprintf(stderr, "Unable to locate property '%s'\n", param->prop_name);
-		return;
+		return EXIT_FAILURE;
 	}
 
 	if (argc < param->arg_count)
 	{
 		fprintf(stderr, "Too few arguments provided.\n");
-		return;
+		return EXIT_INVALID_USAGE;
 	}
 
 	if (strcmp(param->prop_name, WACOM_PROP_BUTTON_ACTIONS) == 0)
 	{
-		if (sscanf(argv[0], "%d", &offset) != 1 || offset <= 0)
+		if (sscanf(argv[0], "%u", &offset) != 1 || offset <= 0)
 		{
 			fprintf(stderr, "'%s' is not a valid button number.\n", argv[0]);
-			return;
+			return EXIT_INVALID_USAGE;
 		}
 
 		offset--;        /* Property is 0-indexed, X buttons are 1-indexed */
@@ -1536,22 +1577,23 @@ static void map_actions(Display *dpy, XDevice *dev, param_t* param, int argc, ch
 		argv = &argv[1]; /* ... ditto ... */
 	}
 
-	special_map_property(dpy, dev, action_prop, offset, argc, argv);
+	return special_map_property(dpy, dev, action_prop, offset, argc, argv);
 }
 
-static void set_xydefault(Display *dpy, XDevice *dev, param_t* param, int argc, char **argv)
+static int set_xydefault(Display *dpy, XDevice *dev, param_t* param, int argc, char **argv)
 {
 	Atom prop, type;
 	int format;
 	unsigned char* data = NULL;
 	unsigned long nitems, bytes_after;
 	long *ldata;
+	int status = EXIT_SUCCESS;
 
 	if (argc != param->arg_count)
 	{
 		fprintf(stderr, "'%s' requires exactly %d value(s).\n", param->name,
 			param->arg_count);
-		return;
+		return EXIT_INVALID_USAGE;
 	}
 
 	prop = XInternAtom(dpy, param->prop_name, True);
@@ -1559,7 +1601,7 @@ static void set_xydefault(Display *dpy, XDevice *dev, param_t* param, int argc, 
 	{
 		fprintf(stderr, "Property for '%s' not available.\n",
 			param->name);
-		return;
+		return EXIT_FAILURE;
 	}
 
 	XGetDeviceProperty(dpy, dev, prop, 0, 1000, False, AnyPropertyType,
@@ -1568,6 +1610,7 @@ static void set_xydefault(Display *dpy, XDevice *dev, param_t* param, int argc, 
 	if (nitems <= param->prop_offset)
 	{
 		fprintf(stderr, "Property offset doesn't exist, this is a bug.\n");
+		status = EXIT_FAILURE;
 		goto out;
 	}
 
@@ -1582,9 +1625,10 @@ static void set_xydefault(Display *dpy, XDevice *dev, param_t* param, int argc, 
 	XFlush(dpy);
 out:
 	XFree(data);
+	return status;
 }
 
-static void set_mode(Display *dpy, XDevice *dev, param_t* param, int argc, char **argv)
+static int set_mode(Display *dpy, XDevice *dev, param_t* param, int argc, char **argv)
 {
 	int mode = Absolute;
 
@@ -1592,10 +1636,10 @@ static void set_mode(Display *dpy, XDevice *dev, param_t* param, int argc, char 
 	{
 		fprintf(stderr, "'%s' requires exactly %d value(s).\n", param->name,
 			param->arg_count);
-		return;
+		return EXIT_INVALID_USAGE;
 	}
 
-	TRACE("Set mode '%s' for device %ld.\n", argv[0], dev->device_id);
+	TRACE("Set mode '%s' for device %lu.\n", argv[0], dev->device_id);
 
 	if (strcasecmp(argv[0], "Relative") == 0)
 		mode = Relative;
@@ -1604,30 +1648,32 @@ static void set_mode(Display *dpy, XDevice *dev, param_t* param, int argc, char 
 	else
 	{
 		fprintf(stderr, "Invalid device mode. Use 'Relative' or 'Absolute'.\n");
-		return;
+		return EXIT_INVALID_USAGE;
 	}
 
 
 	XSetDeviceMode(dpy, dev, mode);
 	XFlush(dpy);
+	return EXIT_SUCCESS;
 }
 
-static void set_rotate(Display *dpy, XDevice *dev, param_t* param, int argc, char **argv)
+static int set_rotate(Display *dpy, XDevice *dev, param_t* param, int argc, char **argv)
 {
 	int rotation = 0;
 	Atom prop, type;
 	int format;
 	unsigned char* data;
 	unsigned long nitems, bytes_after;
+	int status = EXIT_SUCCESS;
 
 	if (argc != param->arg_count)
 	{
 		fprintf(stderr, "'%s' requires exactly %d value(s).\n", param->name,
 			param->arg_count);
-		return;
+		return EXIT_INVALID_USAGE;
 	}
 
-	TRACE("Rotate '%s' for device %ld.\n", argv[0], dev->device_id);
+	TRACE("Rotate '%s' for device %lu.\n", argv[0], dev->device_id);
 
 	if (strcasecmp(argv[0], "cw") == 0 || strcasecmp(argv[0], "1") == 0)
 		rotation = 1;
@@ -1641,7 +1687,7 @@ static void set_rotate(Display *dpy, XDevice *dev, param_t* param, int argc, cha
 	{
 		fprintf(stderr, "'%s' is not a valid value for the '%s' property.\n",
 		        argv[0], param->name);
-		return;
+		return EXIT_INVALID_USAGE;
 	}
 
 	prop = XInternAtom(dpy, param->prop_name, True);
@@ -1649,7 +1695,7 @@ static void set_rotate(Display *dpy, XDevice *dev, param_t* param, int argc, cha
 	{
 		fprintf(stderr, "Property for '%s' not available.\n",
 			param->name);
-		return;
+		return EXIT_FAILURE;
 	}
 
 	XGetDeviceProperty(dpy, dev, prop, 0, 1000, False, AnyPropertyType,
@@ -1659,6 +1705,7 @@ static void set_rotate(Display *dpy, XDevice *dev, param_t* param, int argc, cha
 	{
 		fprintf(stderr, "Property for '%s' has no or wrong value - this is a bug.\n",
 			param->name);
+		status = EXIT_FAILURE;
 		goto out;
 	}
 
@@ -1668,7 +1715,7 @@ static void set_rotate(Display *dpy, XDevice *dev, param_t* param, int argc, cha
 	XFlush(dpy);
 out:
 	XFree(data);
-	return;
+	return status;
 }
 
 
@@ -1721,7 +1768,7 @@ static Bool convert_value_from_user(const param_t *param, const char *value, int
 	return True;
 }
 
-static void set(Display *dpy, int argc, char **argv)
+static int set(Display *dpy, int argc, char **argv)
 {
 	param_t *param;
 	XDevice *dev = NULL;
@@ -1734,11 +1781,12 @@ static void set(Display *dpy, int argc, char **argv)
 	int i;
 	char **values = NULL;
 	int nvals = 0;
+	int status = EXIT_SUCCESS;
 
 	if (argc < 2)
 	{
 		usage();
-		return;
+		return EXIT_INVALID_USAGE;
 	}
 
 	TRACE("'set' requested for '%s'.\n", argv[0]);
@@ -1747,12 +1795,13 @@ static void set(Display *dpy, int argc, char **argv)
 	if (!dev)
 	{
 		fprintf(stderr, "Cannot find device '%s'.\n", argv[0]);
-		return;
+		return EXIT_FAILURE;
 	}
 
 	param = find_parameter(argv[1]);
 	if (!param)
 	{
+		status = EXIT_FAILURE;
 		if (is_deprecated_parameter(argv[1]))
 			goto out;
 		fprintf(stderr, "Unknown parameter name '%s'.\n", argv[1]);
@@ -1760,6 +1809,7 @@ static void set(Display *dpy, int argc, char **argv)
 	} else if (param->prop_flags & PROP_FLAG_READONLY)
 	{
 		fprintf(stderr, "'%s' is a read-only option.\n", argv[1]);
+		status = EXIT_FAILURE;
 		goto out;
 	}
 
@@ -1770,6 +1820,7 @@ static void set(Display *dpy, int argc, char **argv)
 		{
 			fprintf(stderr, "Property '%s' does not exist on device.\n",
 				param->prop_name);
+			status = EXIT_FAILURE;
 			goto out;
 		}
 	}
@@ -1786,6 +1837,7 @@ static void set(Display *dpy, int argc, char **argv)
 	if (nitems <= param->prop_offset)
 	{
 		fprintf(stderr, "Property offset doesn't exist.\n");
+		status = EXIT_FAILURE;
 		goto out;
 	}
 
@@ -1795,6 +1847,7 @@ static void set(Display *dpy, int argc, char **argv)
 	{
 		fprintf(stderr, "'%s' requires exactly %d value(s).\n", param->name,
 			param->arg_count);
+		status = EXIT_INVALID_USAGE;
 		goto out;
 	}
 
@@ -1808,6 +1861,7 @@ static void set(Display *dpy, int argc, char **argv)
 		{
 			fprintf(stderr, "'%s' is not a valid value for the '%s' property.\n",
 				values[i], param->name);
+			status = EXIT_INVALID_USAGE;
 			goto out;
 		}
 
@@ -1844,9 +1898,10 @@ out:
 	free(values);
 	XCloseDevice(dpy, dev);
 	XFree(data);
+	return status;
 }
 
-static void get_mode(Display *dpy, XDevice *dev, param_t* param, int argc, char **argv)
+static int get_mode(Display *dpy, XDevice *dev, param_t* param, int argc, char **argv)
 {
 	XDeviceInfo *info, *d = NULL;
 	int ndevices, i;
@@ -1864,10 +1919,10 @@ static void get_mode(Display *dpy, XDevice *dev, param_t* param, int argc, char 
 	if (i >= ndevices)
 	{
 		fprintf(stderr, "Unable to locate device.\n");
-		return;
+		return EXIT_FAILURE;
 	}
 
-	TRACE("Getting mode for device %ld.\n", dev->device_id);
+	TRACE("Getting mode for device %lu.\n", dev->device_id);
 
 	v = (XValuatorInfoPtr)d->inputclassinfo;
 	for (i = 0; i < d->num_classes; i++)
@@ -1881,20 +1936,22 @@ static void get_mode(Display *dpy, XDevice *dev, param_t* param, int argc, char 
 	}
 
 	XFreeDeviceList(info);
+	return EXIT_SUCCESS;
 }
 
-static void get_rotate(Display *dpy, XDevice *dev, param_t* param, int argc, char **argv)
+static int get_rotate(Display *dpy, XDevice *dev, param_t* param, int argc, char **argv)
 {
 	const char *rotation = NULL;
 	Atom prop, type;
 	int format;
 	unsigned char* data;
 	unsigned long nitems, bytes_after;
+	int status = EXIT_SUCCESS;
 
 	if (argc != 0)
 	{
 		fprintf(stderr, "Incorrect number of arguments supplied.\n");
-		return;
+		return EXIT_INVALID_USAGE;
 	}
 
 	prop = XInternAtom(dpy, param->prop_name, True);
@@ -1902,10 +1959,10 @@ static void get_rotate(Display *dpy, XDevice *dev, param_t* param, int argc, cha
 	{
 		fprintf(stderr, "Property for '%s' not available.\n",
 			param->name);
-		return;
+		return EXIT_FAILURE;
 	}
 
-	TRACE("Getting rotation for device %ld.\n", dev->device_id);
+	TRACE("Getting rotation for device %lu.\n", dev->device_id);
 
 	XGetDeviceProperty(dpy, dev, prop, 0, 1000, False, AnyPropertyType,
 				&type, &format, &nitems, &bytes_after, &data);
@@ -1914,6 +1971,7 @@ static void get_rotate(Display *dpy, XDevice *dev, param_t* param, int argc, cha
 	{
 		fprintf(stderr, "Property for '%s' has no or wrong value - this is a bug.\n",
 			param->name);
+		status = EXIT_FAILURE;
 		goto out;
 	}
 
@@ -1937,7 +1995,7 @@ static void get_rotate(Display *dpy, XDevice *dev, param_t* param, int argc, cha
 
 out:
 	XFree(data);
-	return;
+	return status;
 }
 
 /**
@@ -1952,12 +2010,11 @@ out:
  * @return       0 on failure, 1 otherwise
  */
 static int get_actions(Display *dpy, XDevice *dev,
-				  param_t *param, int offset)
+				  param_t *param, unsigned int offset)
 {
 	Atom prop, type;
 	int format;
 	unsigned long nitems, bytes_after, *data;
-	int i;
 	char buff[1024] = {0};
 	int last_type;
 
@@ -1989,7 +2046,7 @@ static int get_actions(Display *dpy, XDevice *dev,
 		   &bytes_after, (unsigned char**)&data);
 
 	last_type = 0;
-	for (i = 0; i < nitems; i++)
+	for (unsigned int i = 0; i < nitems; i++)
 	{
 		unsigned long action = data[i];
 		int current_type;
@@ -2059,7 +2116,7 @@ static int get_actions(Display *dpy, XDevice *dev,
  * @param offset Offset into the property specified in param
  * @return       0 on failure, 1 otherwise
  */
-static int get_button(Display *dpy, XDevice *dev, param_t *param, int offset)
+static int get_button(Display *dpy, XDevice *dev, param_t *param, unsigned int offset)
 {
 	Atom prop, type;
 	int format;
@@ -2089,7 +2146,7 @@ static int get_button(Display *dpy, XDevice *dev, param_t *param, int offset)
 		return 0;
 	}
 
-	print_button_value(param, offset, "%ld", prop);
+	print_button_value(param, offset, "%lu", prop);
 
 	return 1;
 }
@@ -2105,17 +2162,17 @@ static int get_button(Display *dpy, XDevice *dev, param_t *param, int offset)
  * @param argc  Length of argv
  * @param argv  Command-line arguments
  */
-static void get_map(Display *dpy, XDevice *dev, param_t *param, int argc, char** argv)
+static int get_map(Display *dpy, XDevice *dev, param_t *param, int argc, char** argv)
 {
 	int offset = param->prop_offset;
 
-	TRACE("Getting button map for device %ld.\n", dev->device_id);
+	TRACE("Getting button map for device %lu.\n", dev->device_id);
 
 	if (argc != param->arg_count)
 	{
 		fprintf(stderr, "'%s' requires exactly %d value(s).\n", param->name,
 		        param->arg_count);
-		return;
+		return EXIT_INVALID_USAGE;
 	}
 
 	if (strcmp(param->prop_name, WACOM_PROP_BUTTON_ACTIONS) == 0)
@@ -2123,7 +2180,7 @@ static void get_map(Display *dpy, XDevice *dev, param_t *param, int argc, char**
 		if (sscanf(argv[0], "%d", &offset) != 1 || offset <= 0)
 		{
 			fprintf(stderr, "'%s' is not a valid button number.\n", argv[0]);
-			return;
+			return EXIT_INVALID_USAGE;
 		}
 
 		offset--;        /* Property is 0-indexed, X buttons are 1-indexed */
@@ -2133,9 +2190,9 @@ static void get_map(Display *dpy, XDevice *dev, param_t *param, int argc, char**
 
 
 	if (get_actions(dpy, dev, param, offset))
-		return;
+		return EXIT_SUCCESS;
 	else if (get_button(dpy, dev, param, offset))
-		return;
+		return EXIT_SUCCESS;
 	else
 	{
 		int nmap = 256;
@@ -2146,13 +2203,14 @@ static void get_map(Display *dpy, XDevice *dev, param_t *param, int argc, char**
 		if (offset >= nmap)
 		{
 			fprintf(stderr, "Button number does not exist on device.\n");
-			return;
+			return EXIT_FAILURE;
 		}
 
 		print_value(param, "%d", map[offset]);
 
 		XSetDeviceButtonMapping(dpy, dev, map, nmap);
 		XFlush(dpy);
+		return EXIT_SUCCESS;
 	}
 }
 
@@ -2204,7 +2262,7 @@ static Bool get_mapped_area(Display *dpy, XDevice *dev, int *width, int *height,
 {
 	Atom matrix_prop = XInternAtom(dpy, "Coordinate Transformation Matrix", True);
 	Atom type;
-	int format, i;
+	int format;
 	unsigned long nitems, bytes_after;
 	unsigned long *data;
 	float matrix[9];
@@ -2234,8 +2292,9 @@ static Bool get_mapped_area(Display *dpy, XDevice *dev, int *width, int *height,
 
 	/* XI1 stores 32 bit properties (including float) as long,
 	 * regardless of architecture */
-	for (i = 0; i < ARRAY_SIZE(matrix); i++)
+	for (size_t i = 0; i < ARRAY_SIZE(matrix); i++) {
 		matrix[i] = *(float*)(&data[i]);
+	}
 
 	TRACE("Current transformation matrix:\n");
 	TRACE("	[ %f %f %f ]\n", matrix[0], matrix[1], matrix[2]);
@@ -2275,7 +2334,6 @@ static Bool _set_matrix_prop(Display *dpy, XDevice *dev, const float fmatrix[9])
 	unsigned long nitems, bytes_after;
 	float *data;
 	long matrix[9] = {0};
-	int i;
 
 	if (!matrix_prop)
 	{
@@ -2285,8 +2343,10 @@ static Bool _set_matrix_prop(Display *dpy, XDevice *dev, const float fmatrix[9])
 
 	/* XI1 expects 32 bit properties (including float) as long,
 	 * regardless of architecture */
-	for (i = 0; i < ARRAY_SIZE(matrix); i++)
+
+	for (size_t i = 0; i < ARRAY_SIZE(matrix); i++) {
 		*(float*)(matrix + i) = fmatrix[i];
+	}
 
 	XGetDeviceProperty(dpy, dev, matrix_prop, 0, 9, False,
 				AnyPropertyType, &type, &format, &nitems,
@@ -2537,39 +2597,45 @@ out:
 	return success;
 }
 
-static void set_output(Display *dpy, XDevice *dev, param_t *param, int argc, char **argv)
+static int set_output(Display *dpy, XDevice *dev, param_t *param, int argc, char **argv)
 {
 	int head_no;
 	int x, y, flags;
 	unsigned int width, height;
-
+	Bool success = false;
 	if (argc != param->arg_count)
 	{
 		fprintf(stderr, "'%s' requires exactly %d value(s).\n", param->name,
 			param->arg_count);
-		return;
+		return EXIT_INVALID_USAGE;
 	}
 
 	flags = XParseGeometry(argv[0], &x, &y, &width, &height);
 
 	if (MaskIsSet(flags, XValue|YValue|WidthValue|HeightValue))
-		set_output_area(dpy, dev, x, y, width, height);
+		success = set_output_area(dpy, dev, x, y, width, height);
 	else if (strcasecmp(argv[0], "next") == 0)
-		set_output_next(dpy, dev);
+		success = set_output_next(dpy, dev);
 	else if (strcasecmp(argv[0], "desktop") == 0)
-		set_output_desktop(dpy, dev);
+		success = set_output_desktop(dpy, dev);
 	else if (!need_xinerama(dpy))
-		set_output_xrandr(dpy, dev, argv[0]);
+		success = set_output_xrandr(dpy, dev, argv[0]);
 	else if  (convert_value_from_user(param, argv[0], &head_no))
-		set_output_xinerama(dpy, dev, head_no);
+		success = set_output_xinerama(dpy, dev, head_no);
 	else
+	{
 		fprintf(stderr, "Unable to find an output '%s'.\n", argv[0]);
+		return EXIT_FAILURE;
+	}
+
+	return success ? EXIT_SUCCESS : EXIT_FAILURE;
 }
 
 
-static void get_all(Display *dpy, XDevice *dev, param_t *param, int argc, char **argv)
+static int get_all(Display *dpy, XDevice *dev, param_t *param, int argc, char **argv)
 {
 	param_t *p = parameters;
+	int status = EXIT_FAILURE, success = 1;
 
 	if (param->printformat == FORMAT_DEFAULT)
 		param->printformat = FORMAT_XORG_CONF;
@@ -2596,25 +2662,29 @@ static void get_all(Display *dpy, XDevice *dev, param_t *param, int argc, char *
 					if (i > 3 && i < 8)
 						continue;
 					sprintf(tmparg, "%d", i);
-					get_param(dpy, dev, p, 1, &tmpargv);
+					success = get_param(dpy, dev, p, 1, &tmpargv);
 				}
 			}
 			else
-				get_param(dpy, dev, p, argc, argv);
+				success = get_param(dpy, dev, p, argc, argv);
 		}
 		p++;
+		if(success == 0)
+			status = EXIT_SUCCESS;
 	}
+	return status;
 }
 
-static void get(Display *dpy, enum printformat printformat, int argc, char **argv)
+static int get(Display *dpy, enum printformat printformat, int argc, char **argv)
 {
 	param_t *param;
 	XDevice *dev = NULL;
+	int status = EXIT_SUCCESS;
 
 	if (argc < 2)
 	{
 		usage();
-		return;
+		return EXIT_INVALID_USAGE;
 	}
 
 	TRACE("'get' requested for '%s'.\n", argv[0]);
@@ -2623,19 +2693,21 @@ static void get(Display *dpy, enum printformat printformat, int argc, char **arg
 	if (!dev)
 	{
 		fprintf(stderr, "Cannot find device '%s'.\n", argv[0]);
-		return;
+		return EXIT_FAILURE;
 	}
 
 	param = find_parameter(argv[1]);
 	if (!param)
 	{
 		if (is_deprecated_parameter(argv[1]))
-			return;
+			return EXIT_FAILURE;
 		fprintf(stderr, "Unknown parameter name '%s'.\n", argv[1]);
+		status = EXIT_FAILURE;
 		goto out;
 	} else if (param->prop_flags & PROP_FLAG_WRITEONLY)
 	{
 		fprintf(stderr, "'%s' is a write-only option.\n", argv[1]);
+		status = EXIT_FAILURE;
 		goto out;
 	} else
 	{
@@ -2643,13 +2715,14 @@ static void get(Display *dpy, enum printformat printformat, int argc, char **arg
 		param->device_name = argv[0];
 	}
 
-	get_param(dpy, dev, param, argc - 2, &argv[2]);
+	status = get_param(dpy, dev, param, argc - 2, &argv[2]);
 
 out:
 	XCloseDevice(dpy, dev);
+	return status;
 }
 
-static void get_param(Display *dpy, XDevice *dev, param_t *param, int argc, char **argv)
+static int get_param(Display *dpy, XDevice *dev, param_t *param, int argc, char **argv)
 {
 	Atom prop = None, type;
 	int format;
@@ -2657,6 +2730,7 @@ static void get_param(Display *dpy, XDevice *dev, param_t *param, int argc, char
 	unsigned long nitems, bytes_after;
 	int i;
 	char str[100] = {0};
+	int status = EXIT_SUCCESS;
 
 	if (param->prop_name)
 	{
@@ -2665,25 +2739,25 @@ static void get_param(Display *dpy, XDevice *dev, param_t *param, int argc, char
 		{
 			fprintf(stderr, "Property '%s' does not exist on device.\n",
 				param->prop_name);
-			return;
+			return EXIT_FAILURE;
 		}
 	}
 
 	if (param->get_func)
 	{
 		TRACE("custom get func for param\n");
-		param->get_func(dpy, dev, param, argc, argv);
-		return;
+		return param->get_func(dpy, dev, param, argc, argv);
 	}
 
 
-	TRACE("Getting property %ld, offset %d\n", prop, param->prop_offset);
+	TRACE("Getting property %lu, offset %u\n", prop, param->prop_offset);
 	XGetDeviceProperty(dpy, dev, prop, 0, 1000, False, AnyPropertyType,
 				&type, &format, &nitems, &bytes_after, &data);
 
 	if (nitems <= param->prop_offset)
 	{
 		fprintf(stderr, "Property offset doesn't exist.\n");
+		status = EXIT_FAILURE;
 		goto out;
 	}
 
@@ -2723,10 +2797,11 @@ static void get_param(Display *dpy, XDevice *dev, param_t *param, int argc, char
 
 out:
 	XFree(data);
+	return status;
 }
 
 
-#ifndef BUILD_TEST
+#ifndef ENABLE_TESTS
 
 #ifdef BUILD_FUZZINTERFACE
 void argsfromstdin(int *argc, char ***argv)
@@ -2770,6 +2845,24 @@ void argsfromstdin(int *argc, char ***argv)
 }
 #endif /* BUILD_FUZZINTERFACE */
 
+static bool check_for_wayland(Display *dpy)
+{
+	bool		has_xwayland_devices = false;
+	XDeviceInfo	*info;
+	int		ndevices, i;
+
+	info = XListInputDevices(dpy, &ndevices);
+	for (i = 0; i < ndevices; i++) {
+		if (strncmp(info[i].name, "xwayland-", 9) == 0) {
+			has_xwayland_devices = true;
+			break;
+		}
+	}
+	XFreeDeviceList(info);
+
+	return has_xwayland_devices;
+}
+
 int main (int argc, char **argv)
 {
 	int c;
@@ -2778,6 +2871,7 @@ int main (int argc, char **argv)
 	Display *dpy;
 	int do_list = 0, do_set = 0, do_get = 0;
 	enum printformat format = FORMAT_DEFAULT;
+	int status = EXIT_SUCCESS;
 
 	struct option options[] = {
 		{"help", 0, NULL, 0},
@@ -2799,7 +2893,7 @@ int main (int argc, char **argv)
 	if (argc < 2)
 	{
 		usage();
-		return 1;
+		return EXIT_INVALID_USAGE;
 	}
 
 	while ((c = getopt_long(argc, argv, "+hvVd:sx", options, &optidx)) != -1) {
@@ -2808,9 +2902,9 @@ int main (int argc, char **argv)
 			case 0:
 				switch(optidx)
 				{
-					case 0: usage(); return 0;
+					case 0: usage(); return EXIT_SUCCESS;
 					case 1: verbose = True; break;
-					case 2: version(); return 0;
+					case 2: version(); return EXIT_SUCCESS;
 					case 3: /* display */
 						break;
 					case 4:
@@ -2838,11 +2932,11 @@ int main (int argc, char **argv)
 				break;
 			case 'V':
 				version();
-				return 0;
+				return EXIT_SUCCESS;
 			case 'h':
 			default:
 				usage();
-				return 0;
+				return EXIT_SUCCESS;
 		}
 	}
 
@@ -2852,7 +2946,14 @@ int main (int argc, char **argv)
 	if (!dpy)
 	{
 		fprintf(stderr, "Failed to open Display %s.\n", display ? display : "");
-		return -1;
+		return EXIT_FAILURE;
+	}
+
+	if (check_for_wayland(dpy)) {
+		fprintf(stderr,
+			"Wayland devices found but this tool is incompatible with Wayland. See\n"
+			"https://github.com/linuxwacom/xf86-input-wacom/wiki/Wayland\n");
+		return EXIT_INVALID_USAGE;
 	}
 
 	if (!do_list && !do_get && !do_set)
@@ -2879,24 +2980,25 @@ int main (int argc, char **argv)
 	}
 
 	if (do_list)
-		list(dpy, argc - optind, &argv[optind]);
+		status = list(dpy, argc - optind, &argv[optind]);
 	else if (do_set)
-		set(dpy, argc - optind, &argv[optind]);
+		status = set(dpy, argc - optind, &argv[optind]);
 	else if (do_get)
-		get(dpy, format, argc - optind, &argv[optind]);
+		status = get(dpy, format, argc - optind, &argv[optind]);
 
 	XCloseDisplay(dpy);
-	return 0;
+	return status;
 }
-#endif
+#endif /* ENABLE_TESTS */
 
-#ifdef BUILD_TEST
+#ifdef ENABLE_TESTS
+#include "wacom-test-suite.h"
 #include <assert.h>
 /**
  * Below are unit-tests to ensure xsetwacom continues to work as expected.
  */
 
-static void test_is_modifier(void)
+TEST_CASE(test_is_modifier)
 {
 	char i;
 	char buff[5];
@@ -2926,7 +3028,7 @@ static void test_is_modifier(void)
 	}
 }
 
-static void test_convert_specialkey(void)
+TEST_CASE(test_convert_specialkey)
 {
 	char i;
 	const char *converted;
@@ -2970,14 +3072,14 @@ static void test_convert_specialkey(void)
 	}
 }
 
-static void test_parameter_number(void)
+TEST_CASE(test_parameter_number)
 {
 	/* If either of those two fails, a parameter was added or removed.
 	 * This test simply exists so that we remember to properly
 	 * deprecated them.
 	 * Numbers include trailing NULL entry.
 	 */
-	assert(ARRAY_SIZE(parameters) == 39);
+	assert(ARRAY_SIZE(parameters) == 40);
 	assert(ARRAY_SIZE(deprecated_parameters) == 17);
 }
 
@@ -3010,7 +3112,7 @@ static void _test_conversion(const param_t *param, const char **words,
 	}
 }
 
-static void test_convert_value_from_user(void)
+TEST_CASE(test_convert_value_from_user)
 {
 	param_t test_nonbool =
 	{
@@ -3056,12 +3158,11 @@ static void test_convert_value_from_user(void)
 }
 
 
+extern void wcm_run_tests(void); /* see wacom-test-suite.c */
+
 int main(int argc, char** argv)
 {
-	test_parameter_number();
-	test_is_modifier();
-	test_convert_specialkey();
-	test_convert_value_from_user();
+	wcm_run_tests();
 	return 0;
 }
 

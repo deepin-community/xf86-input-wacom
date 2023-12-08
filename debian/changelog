@@ -1,8 +1,67 @@
-xf86-input-wacom (0.34.99.1-deepin1) unstable; urgency=medium
+xf86-input-wacom (1.2.0-1) unstable; urgency=medium
 
-  * Rebuild
+  * Upload to unstable.
 
- -- Deepin Packages Builder <packages@deepin.org>  Mon, 14 Nov 2022 17:49:36 +0800
+ -- Boyuan Yang <byang@debian.org>  Sun, 11 Jun 2023 21:31:07 -0400
+
+xf86-input-wacom (1.2.0-1~exp1) experimental; urgency=medium
+
+  * New upstream release.
+
+ -- Boyuan Yang <byang@debian.org>  Mon, 10 Apr 2023 15:25:50 -0400
+
+xf86-input-wacom (1.1.0-1) unstable; urgency=medium
+
+  [ Debian Janitor ]
+  * Remove constraints unnecessary since buster:
+    + Build-Depends: Drop versioned constraint on xserver-xorg-dev.
+
+  [ Boyuan Yang ]
+  * New upstream release.
+  * debian/control: Bump Standards-Version to 4.6.1.
+  * debian/upstream/signing-key.asc: Add upstream signing key.
+
+ -- Boyuan Yang <byang@debian.org>  Thu, 14 Jul 2022 10:19:13 -0400
+
+xf86-input-wacom (1.0.0-3) unstable; urgency=medium
+
+  * debian/watch: Fix monitoring script.
+  * debian/control: Restrict arch to linux-any since this project
+    is not for non-linux.
+
+ -- Boyuan Yang <byang@debian.org>  Fri, 01 Apr 2022 09:27:06 -0400
+
+xf86-input-wacom (1.0.0-2) unstable; urgency=high
+
+  * debian/rules: Use non-multiarch dir for xorg module.
+    (Closes: #1007697)
+
+ -- Boyuan Yang <byang@debian.org>  Tue, 15 Mar 2022 10:29:25 -0400
+
+xf86-input-wacom (1.0.0-1) unstable; urgency=medium
+
+  * New upstream release. (Closes: #964106)
+  * Switch to new upstream (GitHub).
+  * debian/watch: Monitor new upstream.
+  * debian/gbp.conf: Added for DEP-14 repo format.
+  * debian/control: Bump debhelper compat to v13.
+  * debian/upstream/metadata: Added.
+  * debian/rules: Rewrite with dh sequencer.
+
+ -- Boyuan Yang <byang@debian.org>  Mon, 14 Mar 2022 08:06:18 -0400
+
+xf86-input-wacom (0.34.99.1-2) unstable; urgency=medium
+
+  * Take over package maintenance via ITS process. (Closes: #1005844)
+  * debian/control:
+    + Apply "wrap-and-sort -abst".
+    + Update Vcs-* fields. (Closes: #909230)
+    + Update homepage field. (Closes: #964107)
+    + Bump Standards-Version to 4.6.0.
+  * debian/compat: Bump to v7. (Closes: #965897)
+  * debian/source/format: Bump to 3.0 (quilt). (Closes: #1007073)
+
+ -- Boyuan Yang <byang@debian.org>  Mon, 14 Mar 2022 07:26:46 -0400
 
 xf86-input-wacom (0.34.99.1-1) unstable; urgency=medium
 

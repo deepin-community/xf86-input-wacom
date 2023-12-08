@@ -1,99 +1,42 @@
 #!/usr/bin/make -f
-# (ever more vaguely) Derived from:
-# Sample debian/rules that uses debhelper,
-# GNU copyright 1997 by Joey Hess.
-# Copyright Ron Lee 2003 - 2016
+# -*- makefile -*-
+# Uncomment this to turn on verbose mode.
+# export DH_VERBOSE=1
 
-export DH_OPTIONS
+# see FEATURE AREAS in dpkg-buildflags(1)
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all
 
-# These are used for cross-compiling and for saving the configure script
-# from having to guess our platform (since we know it already)
-DEB_HOST_GNU_TYPE  ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
-DEB_BUILD_GNU_TYPE ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
-DEB_HOST_MULTIARCH ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH 2>/dev/null)
+# see ENVIRONMENT in dpkg-buildflags(1)
+# package maintainers to append CFLAGS
+#export DEB_CFLAGS_MAINT_APPEND  = -Wall -pedantic
+# package maintainers to append LDFLAGS
+export DEB_LDFLAGS_MAINT_APPEND =
 
+include /usr/share/dpkg/default.mk
 
-objdir = objs
+SYSTEMD_SYSTEM_DIR = /lib/systemd/system
+UDEV_RULES_D_DIR = /lib/udev/rules.d
+XORG_MODULE_DIR = /usr/lib/xorg/modules
+
 package = xserver-xorg-input-wacom
+XDEP = $(shell cat /usr/share/xserver-xorg/xinputdep)
+XSUB = debian/$(package).substvars
 
+%:
+	dh $@
 
-clean:
-	dh_testdir
-	dh_testroot
-	$(RM) -r $(objdir)
-	rm -f *-stamp
-	dh_clean
+override_dh_auto_configure:
+	dh_auto_configure -- \
+	    --with-systemd-unit-dir=$(SYSTEMD_SYSTEM_DIR) \
+	    --with-udev-rules-dir=$(UDEV_RULES_D_DIR) \
+	    --with-xorg-module-dir=$(XORG_MODULE_DIR) \
+	    $(NULL)
 
-
-$(objdir)/config.status: configure
-	dh_testdir
-	mkdir -p $(objdir)
-	cd $(objdir) &&	../configure --disable-maintainer-mode		\
-				     --host=$(DEB_HOST_GNU_TYPE)	\
-				     --build=$(DEB_BUILD_GNU_TYPE)	\
-				     --prefix=/usr			\
-				     --with-systemd-unit-dir=/lib/systemd/system \
-				     --with-udev-rules-dir=/lib/udev/rules.d
-
-build: build-arch
-
-build-arch: build-arch-stamp
-build-arch-stamp: $(objdir)/config.status
-	dh_testdir
-	cd $(objdir) && $(MAKE)
-	touch $@
-
-build-indep:
-
-
-install: install-arch
-
-install-arch: XDEP = $(shell cat /usr/share/xserver-xorg/xinputdep)
-install-arch: XSUB = debian/$(package).substvars
-install-arch: DH_OPTIONS = -p$(package)
-install-arch: build-arch
-install-arch:
-	dh_testdir
-	dh_testroot
-	dh_clean -k
-
-	cd $(objdir) && $(MAKE) install DESTDIR=$(CURDIR)/debian/$(package)
-	mv debian/$(package)/lib/udev/rules.d/wacom.rules \
-	   debian/$(package)/lib/udev/rules.d/69-wacom.rules
-	$(RM) debian/$(package)/usr/lib/xorg/modules/input/*.la
-
-ifneq (,$(DEB_HOST_MULTIARCH))
-	mkdir -p debian/$(package)/usr/lib/$(DEB_HOST_MULTIARCH)
-	mv debian/$(package)/usr/lib/pkgconfig \
-	   debian/$(package)/usr/lib/$(DEB_HOST_MULTIARCH)/pkgconfig
-endif
-
+execute_after_dh_auto_install:
+	# Purge .la files
+	$(RM) debian/xserver-xorg-input-wacom/usr/lib/xorg/modules/input/*.la
+	# Rename wacom udev rules with serial number
+	mv debian/xserver-xorg-input-wacom/$(UDEV_RULES_D_DIR)/wacom.rules debian/xserver-xorg-input-wacom/$(UDEV_RULES_D_DIR)/69-wacom.rules
+	# Handle xinpdriver:*
 	echo "xinpdriver:Depends=$(XDEP)" > $(XSUB)
 	echo "xinpdriver:Provides=xorg-driver-input" >> $(XSUB)
-
-install-indep:
-
-
-binary: binary-arch
-
-binary-arch: DH_OPTIONS = -a
-binary-arch: install-arch
-	dh_testdir
-	dh_testroot
-	dh_installdocs
-	dh_installchangelogs
-	dh_strip
-	dh_compress
-	dh_fixperms
-	dh_installdeb
-	dh_shlibdeps
-	dh_gencontrol
-	dh_md5sums
-	dh_builddeb
-
-binary-indep:
-
-
-.PHONY: clean build build-arch build-indep install install-arch install-indep \
-	binary binary-arch binary-indep
-

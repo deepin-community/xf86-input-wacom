@@ -6,8 +6,7 @@ test -z "$srcdir" && srcdir=.
 ORIGDIR=`pwd`
 cd $srcdir
 
-autoreconf -v --install --force || exit 1
-rm -rf autom4te.cache m4
+autoreconf -v --install || exit 1
 cd $ORIGDIR || exit $?
 
-#$srcdir/configure "$@"
+$srcdir/configure "$@"

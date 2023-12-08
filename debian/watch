@@ -1,0 +1,4 @@
+version=4
+opts="pgpmode=auto,filenamemangle=s%(?:.*?)?v?(\d[\d.]*@ARCHIVE_EXT@)%@PACKAGE@-$1%" \
+ https://github.com/linuxwacom/xf86-input-wacom/releases \
+ (?:.*?/)?v?@PACKAGE@-@ANY_VERSION@@ARCHIVE_EXT@

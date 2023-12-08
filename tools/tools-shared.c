@@ -16,9 +16,7 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  */
 
-#ifdef HAVE_CONFIG_H
 #include "config.h"
-#endif
 
 #include <errno.h>
 #include <fcntl.h>
@@ -55,8 +53,10 @@ int open_device(const char *path)
 	TRACE("Opening device '%s'.\n", path);
 	fd = open(path, O_RDWR | O_NOCTTY);
 
-	if (fd < 1)
+	if (fd < 1) {
 		perror("Failed to open device file");
+		goto out;
+	}
 
 	if (ioctl(fd, TIOCGSERIAL, &ser) == -1)
 	{
@@ -93,7 +93,7 @@ int set_serial_attr(int fd, unsigned int baud)
 	t.c_cc[VTIME] = 10;	/* vtime 10 */
 	t.c_iflag |= IXOFF;	/* flow controll xoff */
 
-	TRACE("Baud rate is %d\n", baud);
+	TRACE("Baud rate is %u\n", baud);
 
 	switch(baud)
 	{
@@ -113,7 +113,7 @@ int set_serial_attr(int fd, unsigned int baud)
 
 int write_to_tablet(int fd, const char *command)
 {
-	int len = 0;
+	unsigned long len = 0;
 
 	do {
 		int l;
@@ -195,29 +195,29 @@ void memdump(const unsigned char *buffer, int len)
 	TRACE("\n");
 }
 
-int skip_garbage(unsigned char *buffer, size_t len)
+size_t skip_garbage(unsigned char *buffer, size_t len)
 {
-	int i;
+	size_t i;
 	for (i = 0; i < len; i++)
 		if (buffer[i] & HEADER_BIT)
 			break;
 
 	if (i != 0)
-		TRACE("skipping over %d bytes.\n", (i < len) ? i : -1);
+		TRACE("skipping over %zu bytes.\n", len);
 
-	return (i < len) ? i : -1;
+	return i;
 }
 
-int read_data(int fd, unsigned char* buffer, int min_len)
+size_t read_data(int fd, unsigned char* buffer, size_t min_len)
 {
-	int len = 0;
+	size_t len = 0;
 	int attempts = 10;
-	int skip;
+	size_t skip;
 
-	TRACE("Reading %d bytes from device.\n", min_len);
+	TRACE("Reading %zu bytes from device.\n", min_len);
 redo:
 	do {
-		int l = read(fd, &buffer[len], min_len);
+		int l = read(fd, &buffer[len], min_len - len);
 
 		if (l == -1) {
 			if (errno != EAGAIN) {
@@ -235,16 +235,19 @@ redo:
 	} while (len < min_len && attempts);
 
 	if (!attempts) {
-		fprintf(stderr, "Only able to read %d bytes.\n", len);
+		fprintf(stderr, "Only able to read %zu bytes.\n", len);
 		memdump(buffer, len);
 		return -1;
 	}
 
-	TRACE("Read %d bytes.\n", len);
+	TRACE("Read %zu bytes.\n", len);
 
 	skip = skip_garbage(buffer, len);
-	if (skip > 0) {
-		TRACE("%d bytes garbage.\n", skip);
+	if (skip >= len) {
+		TRACE("Entire buffer (%zu bytes) garbage.\n", len);
+	}
+	else if (skip > 0) {
+		TRACE("%zu bytes garbage.\n", skip);
 		len -= skip;
 		memmove(buffer, &buffer[skip], len);
 		goto redo;
@@ -252,7 +255,7 @@ redo:
 
 	if (len > min_len)
 	{
-		TRACE("%d bytes unexpected data.\n", (len - min_len));
+		TRACE("%zu bytes unexpected data.\n", (len - min_len));
 		memdump(&buffer[min_len], len - min_len);
 	}
 
@@ -407,8 +410,8 @@ int parse_touch_packet(unsigned char* buffer, int packetlength)
 int event_loop(int fd, int sensor_id)
 {
 	unsigned char buffer[256];
-	int dlen = 0;
-	int packetlength = ISDV4_PKGLEN_TPCPEN;
+	size_t dlen = 0;
+	size_t packetlength = ISDV4_PKGLEN_TPCPEN;
 
 	TRACE("Waiting for events\n");
 
@@ -438,8 +441,11 @@ int event_loop(int fd, int sensor_id)
 			if (buffer[0] & TOUCH_CONTROL_BIT)
 				packetlength = ISDV4PacketLengths[sensor_id];
 		} else {
-			int bytes = skip_garbage(buffer, dlen);
-			if (bytes > 0) {
+			size_t bytes = skip_garbage(buffer, dlen);
+			if (bytes >= dlen) {
+				TRACE("Entire buffer (%zu bytes) garbage.\n", dlen);
+			}
+			else if (bytes > 0) {
 				dlen -= bytes;
 				memmove(buffer, &buffer[bytes], sizeof(buffer) - bytes);
 			}
@@ -449,7 +455,7 @@ int event_loop(int fd, int sensor_id)
 
 		if (dlen < packetlength)
 			continue;
-		TRACE("Expecting packet sized %d\n", packetlength);
+		TRACE("Expecting packet sized %zu\n", packetlength);
 
 		if (buffer[0] & CONTROL_BIT) {
 			dlen -= packetlength;
@@ -468,9 +474,12 @@ int event_loop(int fd, int sensor_id)
 		}
 
 		if (garbage) {
-			int bytes;
+			size_t bytes;
 			bytes = skip_garbage(buffer, packetlength);
-			if (bytes > 0) {
+			if (bytes >= packetlength) {
+				TRACE("Entire buffer (%zu bytes) garbage.\n", packetlength);
+			}
+			else if (bytes > 0) {
 				dlen -= bytes;
 				memmove(buffer, &buffer[bytes], sizeof(buffer) - bytes);
 			}

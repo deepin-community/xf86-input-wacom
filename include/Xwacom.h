@@ -1,6 +1,6 @@
 /*
  * Copyright 2003 by John Joganic <john@joganic.com>
- * Copyright 2003 - 2009 by Ping Cheng <pingc@wacom.com> 
+ * Copyright 2003 - 2009 by Ping Cheng <pingc@wacom.com>
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -13,7 +13,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software 
+ * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  */
 
@@ -60,6 +60,7 @@
 #define AC_MODETOGGLE       0x00020000	/* Toggle absolute/relative mode */
 #define AC_DBLCLICK         0x00030000	/* DEPRECATED: use two button events instead */
 #define AC_DISPLAYTOGGLE    0x00040000  /* DEPRECATED: has no effect (used to toggle among screens) */
+#define AC_PANSCROLL        0x00050000  /* Enter/exit panscroll mode */
 #define AC_BUTTON           0x00080000	/* Emit button events */
 #define AC_TYPE             0x000f0000	/* The mask to isolate event type bits */
 #define AC_KEYBTNPRESS      0x00100000  /* bit set for key/button presses */
