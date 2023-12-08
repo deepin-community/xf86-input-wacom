@@ -1,9 +1,9 @@
 .\" shorthand for double quote that works everywhere.
 .ds q \N'34'
-.TH xsetwacom __appmansuffix__ __vendorversion__
+.TH xsetwacom 1 "@VERSION@"
 .SH NAME
 .LP
-xsetwacom \- commandline utility to query and modify __drivername__ driver settings.
+xsetwacom \- commandline utility to query and modify wacom driver settings.
 .SH "SYNOPSIS"
 .LP
 xsetwacom [options] [command [arguments]]
@@ -11,12 +11,12 @@ xsetwacom [options] [command [arguments]]
 .SH "DESCRIPTION"
 .LP
 This program queries or changes properties on the devices loaded by the
-__drivername__ driver. The modification of properties happens at runtime
+wacom driver. The modification of properties happens at runtime
 and is not persistent through X server restarts.
 .SH "GENERAL OPTIONS"
 .TP
 \fB-d, --display\fR display_name
-Connect to the X server specified in display_name; see X(__miscmansuffix__).
+Connect to the X server specified in display_name; see X(7).
 .TP
 \fB-h, --help\fR
 Prints a short help.
@@ -45,7 +45,7 @@ and
 .SS "LIST COMMANDS"
 .TP
 \fBlist\fR devices
-List known devices. Only input devices managed by the __drivername__
+List known devices. Only input devices managed by the wacom
 driver are listed.
 .TP
 \fBlist\fR parameters
@@ -100,7 +100,8 @@ of the area defined.  Default:  0 0 x2 y2; with x2 and y2 tablet specific.
 \fBButton\fR button-number [mapping]
 Set a mapping for the specified button-number. Mappings take the form of
 either a single numeric button or an 'action' to be performed. If no mapping
-is provided, the default mapping is restored.
+is provided, the default mapping is restored. If button-number is mapped
+to 0, the Button event is ignored.
 
 Numeric button mappings indicate what X11 button number the given button-number
 should correspond to. For example, a mapping of "3" means a press of the given
@@ -133,6 +134,13 @@ numbers.
 
 The "modetoggle" keyword is also recognized; it takes no arguments,
 and toggles the device mode between relative and absolute pointer tracking.
+
+The "pan" keyword causes the driver to send scroll events while the pen
+is dragged. This makes it easy to scroll through lists and documents,
+pan around 2D canvases, and zoom in/out of 3D scenes (exact behavior
+depends on application interpretation of scrollwheel events). Dragging
+the pen up/down will send scrollwheel down/up events; dragging it left/right
+will send scrollwheel right/left events.
 
 The events in the action mapping are sent when the physical button is pressed.
 If the action mapping leaves any buttons or keys pressed (such as a modifier
@@ -247,9 +255,10 @@ This is a read-only parameter. Initial touch switch state is retrieved from the
 kernel when X driver starts.
 .TP
 \fBCursorProximity\fR distance
-sets the max distance from tablet to stop reporting movement for cursor in
-relative mode. Default for Intuos series is 10, for Graphire series (including
-Volitos) is 42. Only available for the cursor/puck device.
+Set the distance at which a relative tool is treated as being out of proximity.
+Beyond this distance the cursor will stop responding to tool motion. The
+default value for pucks is 10 (Intuos Pro) or 42 (Intuos/Bamboo). The default
+value for pens is 30.
 .TP
 \fBThreshold\fR level
 Set the minimum pressure necessary to generate a Button event for the stylus
@@ -273,14 +282,29 @@ initial pressure reading may be unequal to zero even for a perfectly
 good pen. If the consecutive pressure readings are not higher than
 the initial pressure by a threshold no button event will be generated.
 This option allows to disable the recalibration.  Default:  on
+.TP
+\fBPanScrollThreshold\fR distance
+This specifies the distance the pen must move (in tablet units) before
+a scroll event is generated when using the "pan" action. Smaller values
+will require less distance and be more sensitive. Larger values will
+require more distance and be less sensitive.  Default: 1300 or 2600
+depending on tablet resolution (corresponds to 13 mm of distance).
+
+.SH WAYLAND SUPPORT
+
+This tool provides access to the device properties implemented in the
+\fBxf86-input-wacom\fR X server input module. It does not work under a
+Wayland compositor as the input module is not active.
+.TP
+See https://github.com/linuxwacom/xf86-input-wacom/wiki/Wayland for details.
 
 
 .SH "AUTHORS"
 Peter Hutterer <peter.hutterer@redhat.com>
 
 .SH "SEE ALSO"
-__xservername__(__appmansuffix__), __drivername__(__drivermansuffix__),
-xorg.conf(__filemansuffix__),
-X(__miscmansuffix__)
+Xorg(1), wacom(4),
+xorg.conf(5),
+X(7)
 .PP
-More information is available at http://linuxwacom.sourceforge.net
+More information is available at https://github.com/linuxwacom/xf86-input-wacom

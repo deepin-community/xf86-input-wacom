@@ -2,19 +2,26 @@ if UNITTESTS
 include ../src/common.mk
 
 check_PROGRAMS = wacom-tests
-check_LTLIBRARIES = libwacom-test.la
-libwacom_test_la_SOURCES =$(DRIVER_SOURCES)
-libwacom_test_la_CFLAGS = -DUNIT_TESTS -I$(top_srcdir)/src $(XORG_CFLAGS) $(CWARNFLAGS) -fvisibility=default
+check_LTLIBRARIES = wacom_drv_test.la
+
+wacom_drv_test_la_SOURCES = $(DRIVER_SOURCES) wacom-test-suite.c wacom-test-suite.h
+wacom_drv_test_la_CFLAGS = $(AM_CFLAGS) $(XORG_CFLAGS) -I$(top_srcdir)/include -I$(top_srcdir)/src -DENABLE_TESTS -fvisibility=default
+wacom_drv_test_la_LDFLAGS = -module -avoid-version -rpath $(abs_builddir)
+wacom_drv_test_la_LIBADD = $(XORG_LIBS)
+
+wacom_tests_LDADD = -ldl
+wacom_tests_LDFLAGS = -rpath $(abs_builddir)/.libs
+wacom_tests_CFLAGS = $(AM_CFLAGS) -DENABLE_TESTS
+wacom_tests_SOURCES = wacom-tests.c
 
 TESTS=$(check_PROGRAMS)
 
-AM_CPPFLAGS = -I$(top_srcdir)/src -I$(top_srcdir)/include
-AM_CFLAGS = $(XORG_CFLAGS) $(CWARNFLAGS) $(UDEV_CFLAGS)
-TEST_LDADD= libwacom-test.la
-COMMON_SOURCES=fake-symbols.c fake-symbols.h
-
-wacom_tests_LDADD=$(TEST_LDADD) $(UDEV_LIBS)
-wacom_tests_CFLAGS=  -DUNIT_TESTS $(AM_CFLAGS)
-wacom_tests_SOURCES=wacom-tests.c $(COMMON_SOURCES)
-
 endif
+
+EXTRA_DIST= \
+	    __init__.py \
+	    conftest.py \
+	    test_wacom.py \
+	    devices/wacom-pth660.yml \
+	    wacom-test-env.sh \
+	    $(NULL)

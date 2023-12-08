@@ -22,29 +22,68 @@
 
 # Initialize Autoconf
 AC_PREREQ([2.60])
+# bump version in meson.build
 AC_INIT([xf86-input-wacom],
-        [0.34.99.1],
-        [https://bugs.freedesktop.org/enter_bug.cgi?product=xorg],
+        [1.2.0],
+        [https://github.com/linuxwacom/xf86-input-wacom/issues/],
         [xf86-input-wacom])
 AC_CONFIG_MACRO_DIR([m4])
 AC_CONFIG_SRCDIR([Makefile.am])
 AC_CONFIG_HEADERS([config.h])
 
 # Initialize Automake
-AM_INIT_AUTOMAKE([foreign dist-bzip2 no-dist-gzip])
+AM_INIT_AUTOMAKE([foreign dist-bzip2 no-dist-gzip subdir-objects])
 AM_MAINTAINER_MODE([enable])
 AC_USE_SYSTEM_EXTENSIONS
+
+AC_PROG_CC_STDC
+
+m4_include([m4/ax_check_compile_flag.m4])
 
 # Initialize libtool
 AC_DISABLE_STATIC
 AC_PROG_LIBTOOL
+
+# -----------------------------------------------------------------------------
+#                      Compiler Flags / Libraries
+# -----------------------------------------------------------------------------
+m4_define(COMPILER_FLAGS, [
+          -Wall
+          -Wextra
+          -Wno-unused-parameter
+          -Wmissing-prototypes
+          -Wstrict-prototypes
+          -Wlogical-op
+          -Wpointer-arith
+          -Wuninitialized
+          -Winit-self
+          -Wstrict-prototypes
+          -Wimplicit-fallthrough
+          -Wredundant-decls
+          -Wincompatible-pointer-types
+          -Wformat=2
+          -Wformat-overflow=2
+          -Wformat-signedness
+          -Wformat-truncation=2
+          -Wmissing-declarations
+          -Wshift-overflow=2
+          -Wstrict-overflow=2
+          -Wswitch-enum
+
+          -fvisibility=hidden
+])
+m4_foreach_w([_flag], COMPILER_FLAGS, [
+    AX_CHECK_COMPILE_FLAG(_flag, AVAILABLE_FLAGS="$AVAILABLE_FLAGS _flag", [], [-Werror])
+])
+AM_CFLAGS="$AM_CFLAGS $AVAILABLE_FLAGS"
+AM_CFLAGS="$AM_CFLAGS -D_GNU_SOURCE"
+AC_SUBST(AM_CFLAGS)
 
 # Initialize X.Org macros 1.8 or later for MAN_SUBSTS set by XORG_MANPAGE_SECTIONS
 m4_ifndef([XORG_MACROS_VERSION],
           [m4_fatal([must install xorg-macros 1.8 or later before running autoconf/autogen])])
 XORG_MACROS_VERSION([1.8])
 XORG_DEFAULT_OPTIONS
-XORG_WITH_DOXYGEN(1.6.1)
 
 # Checks for libraries.
 AC_CHECK_LIB([m], [rint])
@@ -52,7 +91,7 @@ AC_CHECK_LIB([m], [rint])
 XPROTOS="xproto xext kbproto inputproto randrproto"
 
 # Obtain compiler/linker options from server and required extensions
-PKG_CHECK_MODULES(XORG, [xorg-server >= 1.7.0] $XPROTOS)
+PKG_CHECK_MODULES(XORG, [xorg-server >= 1.13.0] $XPROTOS)
 
 # Obtain compiler/linker options for the xsetwacom tool
 PKG_CHECK_MODULES(X11, x11 xi xrandr xinerama $XPROTOS)
@@ -106,6 +145,21 @@ AC_ARG_WITH([xorg-conf-dir],
 AC_SUBST(configdir)
 AM_CONDITIONAL(HAS_XORG_CONF_DIR, [test "x$configdir" != "x"])
 
+AC_ARG_ENABLE(hal-fdi-preprobe-quirk, AS_HELP_STRING([--enable-hal-fdi-preprobe-quirk],
+                          [Install HAL workaround for devices with unsupported EV_SW events (default: auto)]),
+                          [USE_HAL_FDI_PREPROBE_QUIRK=$enableval],
+                          [USE_HAL_FDI_PREPROBE_QUIRK=auto])
+if test "x$USE_HAL_FDI_PREPROBE_QUIRK" = xauto ; then
+       AC_CHECK_PROG([LSHAL], [lshal], [yes], [no])
+       AC_CHECK_PROG([HAL_SET_PROPERTY], [hal-set-property], [yes], [no])
+       AS_IF([test "x$LSHAL" = "xyes" -a "x$HAL_SET_PROPERTY" = "xyes"],
+             [USE_HAL_FDI_PREPROBE_QUIRK=yes],
+             [USE_HAL_FDI_PREPROBE_QUIRK=no])
+fi
+AC_MSG_CHECKING([if HAL preprobe quirk should be installed])
+AC_MSG_RESULT($USE_HAL_FDI_PREPROBE_QUIRK)
+AM_CONDITIONAL(USE_HAL_FDI_PREPROBE_QUIRK, [test "x$USE_HAL_FDI_PREPROBE_QUIRK" = xyes])
+
 AC_ARG_ENABLE(fuzz-interface, AS_HELP_STRING([--enable-fuzz-interface],
                           [Enable xsetwacom to take NUL-separated commands from stdin (default: no)]),
                           [FUZZINTERFACE=$enableval],
@@ -117,37 +171,20 @@ AC_ARG_ENABLE(unit-tests, AS_HELP_STRING([--enable-unit-tests],
                           [UNITTESTS=$enableval],
                           [UNITTESTS=auto])
 
-# If unittests aren't explicitly disabled, check for required support
-if test "x$UNITTESTS" != xno ; then
-       # Check if linker supports -wrap, passed via compiler flags
-       # When cross-compiling, reports no, since unit tests run from
-       # "make check", so would be running on build machine,  not target
-       AC_MSG_CHECKING([whether the linker supports -wrap])
-       save_LDFLAGS="$LDFLAGS"
-       LDFLAGS="$LDFLAGS -Wl,-wrap,exit"
-       AC_RUN_IFELSE([AC_LANG_PROGRAM([[
-        void __wrap_exit (int s)
-        {
-            __real_exit (0);
-        }]],
-        [[exit (1);]])],
-                     [linker_can_wrap="yes"],
-                     [linker_can_wrap="no"],
-                     [linker_can_wrap="no"])
-       AC_MSG_RESULT([$linker_can_wrap])
-       LDFLAGS="$save_LDFLAGS"
+# Check for the availability of dlsym and friends
+AC_CHECK_LIB([dl], [dlsym],
+    [libdl_available="yes"],
+    [libdl_available="no"]
+)
+
+# If unittests aren't explicitly enabled, check for required support
+if test "x$UNITTESTS" = xauto; then
+    UNITTESTS=$libdl_available
 fi
 
-if test "x$UNITTESTS" = xauto; then
-       if test "x$linker_can_wrap" = xyes; then
-           UNITTESTS=yes
-       else
-           UNITTESTS=no
-       fi
-fi
 if test "x$UNITTESTS" = xyes; then
-       if test "x$linker_can_wrap" = xno; then
-           AC_MSG_ERROR([ld -wrap support required to build unit tests])
+       if test "x$libdl_available" = xno; then
+           AC_MSG_ERROR([dlsym required to build unit tests])
        fi
        AC_DEFINE(UNITTESTS, 1, [Enable unit tests])
 fi
@@ -162,14 +199,14 @@ SYSTEMD_UNIT_DIR=${unitdir}
 AC_SUBST(SYSTEMD_UNIT_DIR)
 AM_CONDITIONAL(HAVE_SYSTEMD_UNIT_DIR, [test "x$SYSTEMD_UNIT_DIR" != "xno"])
 
-AC_ARG_WITH(udev-rules-dir,                                                   
+AC_ARG_WITH(udev-rules-dir,
             AS_HELP_STRING([--with-udev-rules-dir=DIR],
                            [Directory where udev expects its rules files
                            [[default=$libdir/udev/rules.d]]]),
-            [udevdir="$withval"],                   
+            [udevdir="$withval"],
             [udevdir="$libdir/udev/rules.d"])
 UDEV_RULES_DIR=${udevdir}
-AC_SUBST(UDEV_RULES_DIR)                                               
+AC_SUBST(UDEV_RULES_DIR)
 AM_CONDITIONAL(HAVE_UDEV_RULES_DIR, [test "x$UDEV_RULES_DIR" != "xno"])
 
 
@@ -177,8 +214,6 @@ AM_CONDITIONAL(HAVE_UDEV_RULES_DIR, [test "x$UDEV_RULES_DIR" != "xno"])
 
 AC_CONFIG_FILES([Makefile
                  conf/Makefile
-                 doc/Makefile
-                 doc/doxygen.conf
                  src/Makefile
                  man/Makefile
                  include/Makefile
