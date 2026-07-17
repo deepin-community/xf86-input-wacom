@@ -1,7 +1,7 @@
 Source: xf86-input-wacom
 Section: x11
 Priority: optional
-Maintainer: Boyuan Yang <byang@debian.org>
+Maintainer: Debian QA Group <packages@qa.debian.org>
 Build-Depends:
  debhelper-compat (= 13),
  libudev-dev,
@@ -9,10 +9,11 @@ Build-Depends:
  libxi-dev,
  libxinerama-dev,
  libxrandr-dev,
- pkg-config,
+ pkgconf,
+ systemd-dev,
  xserver-xorg-dev,
  xutils-dev,
-Standards-Version: 4.6.1
+Standards-Version: 4.7.0
 Homepage: https://linuxwacom.github.io/
 Vcs-Git: https://salsa.debian.org/debian/xf86-input-wacom.git
 Vcs-Browser: https://salsa.debian.org/debian/xf86-input-wacom

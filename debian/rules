@@ -14,8 +14,9 @@ export DEB_LDFLAGS_MAINT_APPEND =
 
 include /usr/share/dpkg/default.mk
 
-SYSTEMD_SYSTEM_DIR = /lib/systemd/system
-UDEV_RULES_D_DIR = /lib/udev/rules.d
+# https://bugs.debian.org/1057831
+SYSTEMD_SYSTEM_DIR = $(shell pkg-config --variable=systemdsystemunitdir systemd)
+UDEV_RULES_D_DIR = $(shell pkg-config --variable=udevdir udev)/rules.d
 XORG_MODULE_DIR = /usr/lib/xorg/modules
 
 package = xserver-xorg-input-wacom

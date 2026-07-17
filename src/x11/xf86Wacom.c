@@ -401,8 +401,6 @@ valuatorNumber(enum WacomAxisType which)
 static inline void
 convertAxes(const WacomAxisData *axes, ValuatorMask *mask)
 {
-
-
 	for (enum WacomAxisType which = _WACOM_AXIS_LAST; which > 0; which >>= 1)
 	{
 		int value;
@@ -427,7 +425,8 @@ void wcmEmitProximity(WacomDevicePtr priv, bool is_proximity_in,
 	valuator_mask_zero(mask);
 	convertAxes(axes, mask);
 
-	xf86PostProximityEventM(pInfo->dev, is_proximity_in, mask);
+	if (valuator_mask_num_valuators(mask))
+		xf86PostProximityEventM(pInfo->dev, is_proximity_in, mask);
 }
 
 void wcmEmitMotion(WacomDevicePtr priv, bool is_absolute, const WacomAxisData *axes)
@@ -438,7 +437,8 @@ void wcmEmitMotion(WacomDevicePtr priv, bool is_absolute, const WacomAxisData *a
 	valuator_mask_zero(mask);
 	convertAxes(axes, mask);
 
-	xf86PostMotionEventM(pInfo->dev, is_absolute, mask);
+	if (valuator_mask_num_valuators(mask))
+		xf86PostMotionEventM(pInfo->dev, is_absolute, mask);
 }
 
 void wcmEmitButton(WacomDevicePtr priv, bool is_absolute, int button, bool is_press, const WacomAxisData *axes)
@@ -448,7 +448,6 @@ void wcmEmitButton(WacomDevicePtr priv, bool is_absolute, int button, bool is_pr
 	ValuatorMask *mask = priv->valuator_mask;
 	valuator_mask_zero(mask);
 	convertAxes(axes, mask);
-
 
 	xf86PostButtonEventM(pInfo->dev, is_absolute, button, is_press, mask);
 }
@@ -469,7 +468,6 @@ void wcmNotifyEvdev(WacomDevicePtr priv, const struct input_event *event)
 {
 	/* NOOP */
 }
-
 
 void wcmInitAxis(WacomDevicePtr priv, enum WacomAxisType type,
 			int min, int max, int res)

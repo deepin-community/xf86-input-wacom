@@ -621,7 +621,7 @@ xsetwacom_LDADD = $(X11_LIBS)
 @UNITTESTS_TRUE@xsetwacom_test_CFLAGS = $(AM_CFLAGS) $(X11_CFLAGS) -I$(top_srcdir)/include -DENABLE_TESTS -I$(top_srcdir)/test -Wno-unused-function
 @UNITTESTS_TRUE@xsetwacom_test_LDADD = $(X11_LIBS)
 @UNITTESTS_TRUE@TESTS = $(check_PROGRAMS)
-EXTRA_DIST = wacom-record.c
+EXTRA_DIST = wacom-record.c pressurecurve.c
 all: all-am
 
 .SUFFIXES:
