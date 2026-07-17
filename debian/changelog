@@ -1,3 +1,75 @@
+xf86-input-wacom (1.2.3-1) unstable; urgency=medium
+
+  * QA upload.
+  * Upload to unstable.
+  * debian/patches/31d3b745d630ed87ed25d1f44a6596c9968ffc0c.patch:
+    Cherry-pick upstream patch to fix installation of systemd unit.
+
+ -- Boyuan Yang <byang@debian.org>  Wed, 29 Jan 2025 11:17:20 -0500
+
+xf86-input-wacom (1.2.3-1~exp1) experimental; urgency=medium
+
+  * QA upload.
+  * debian/upstream/signing-key.asc: Use new pubkey.
+  * New upstream version 1.2.3.
+
+ -- Boyuan Yang <byang@debian.org>  Sun, 05 Jan 2025 12:49:37 -0500
+
+xf86-input-wacom (1.2.2-3) unstable; urgency=medium
+
+  * QA upload.
+
+  * Corrected 1000-appstream-metainfo.patch to avoid errors from validate.
+
+ -- Petter Reinholdtsen <pere@debian.org>  Tue, 06 Aug 2024 06:11:58 +0200
+
+xf86-input-wacom (1.2.2-2) unstable; urgency=medium
+
+  * QA upload.
+
+  * Added 1000-appstream-metainfo.patch with Appstream mapping
+    from hardware to package.
+
+ -- Petter Reinholdtsen <pere@debian.org>  Tue, 16 Jul 2024 17:42:26 +0200
+
+xf86-input-wacom (1.2.2-1) unstable; urgency=medium
+
+  * QA upload.
+  * New upstream release.
+  * debian/control: Update build-dep pkg-config => pkgconf, S-D 4.7.0.
+
+ -- Boyuan Yang <byang@debian.org>  Sun, 12 May 2024 10:10:49 -0400
+
+xf86-input-wacom (1.2.1-1) unstable; urgency=medium
+
+  * QA upload.
+  * New upstream release.
+
+ -- Boyuan Yang <byang@debian.org>  Fri, 22 Mar 2024 11:22:54 -0400
+
+xf86-input-wacom (1.2.0-3) unstable; urgency=medium
+
+  * QA upload.
+  * Orphan the package.
+
+ -- Boyuan Yang <byang@debian.org>  Sun, 03 Mar 2024 11:47:41 -0500
+
+xf86-input-wacom (1.2.0-2) unstable; urgency=medium
+
+  * Upload to unstable. (Closes: #1057831)
+
+ -- Boyuan Yang <byang@debian.org>  Wed, 13 Dec 2023 14:48:19 -0500
+
+xf86-input-wacom (1.2.0-2~exp1) experimental; urgency=medium
+
+  * Upload to experimental for usr-merge file movement.
+
+  [ Chris Hofstaedtler ]
+  * Non-maintainer upload.
+  * Use udev.pc/systemd.pc to place files
+
+ -- Boyuan Yang <byang@debian.org>  Sat, 09 Dec 2023 08:55:19 -0500
+
 xf86-input-wacom (1.2.0-1) unstable; urgency=medium
 
   * Upload to unstable.

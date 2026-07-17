@@ -1,0 +1,26 @@
+From 31d3b745d630ed87ed25d1f44a6596c9968ffc0c Mon Sep 17 00:00:00 2001
+From: Funda Wang <fundawang@yeah.net>
+Date: Sun, 17 Nov 2024 19:04:07 +0800
+Subject: [PATCH] meson.build: fix variable name when dealing with
+ systemd-unit-dir
+
+Applied-Upstream: https://github.com/linuxwacom/xf86-input-wacom/commit/31d3b745d630ed87ed25d1f44a6596c9968ffc0c
+---
+ meson.build | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/meson.build b/meson.build
+index 139dc3f4..d2efe084 100644
+--- a/meson.build
++++ b/meson.build
+@@ -89,8 +89,8 @@ if dir_udev_rules == ''
+ endif
+ 
+ dir_systemd_unit = get_option('systemd-unit-dir')
+-if dir_udev_rules == ''
+-	dir_systemd_unit = dir_systemd / 'systemd'
++if dir_systemd_unit == ''
++	dir_systemd_unit = dir_systemd / 'system'
+ endif
+ 
+ 

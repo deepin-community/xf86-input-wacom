@@ -1,3 +1,547 @@
+commit 4aab05f10e44b2c990f603b5ecbaff49c65871e8
+Author: Joshua Dickens <Joshua@Joshua-Dickens.com>
+Date:   Tue Oct 29 14:55:35 2024 -0700
+
+    wacom 1.2.3
+    
+    Signed-off-by: Joshua Dickens <Joshua@Joshua-Dickens.com>
+
+commit 948d0ba8a918646154d3bd73c7483639d4a79d55
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Mon Oct 21 19:12:14 2024 +1000
+
+    man: discourage use of Section InputDevice
+    
+    Closes #339
+
+commit 47552e13e714ab6b8c2dcbce0d7e0bca6d8a8bf0
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Thu Sep 12 10:56:59 2024 +1000
+
+    conf: bind this driver to all tablets by default
+    
+    Historically we've only bound to Wacom devices and a select few other
+    tablets that were handled by this driver. This required adding those
+    tablets which we forgot for years for e.g. Huion/XP-Pen devices
+    (see commit 4e1d6d61).
+    
+    At this point we should support pretty much anything that is a tablet so
+    let's bind to those by default.
+    
+    Exceptions for Wacom touchpad/touchscreens stay in the file and so do
+    some other ones that are too hard to test whether they're handled by
+    them generic MatchIsTablet condition.
+    
+    Closes #353
+
+commit 659fee33a1e3600e86a959e60d969754fa1370b9
+Author: TheSnowfield <17957399+TheSnowfield@users.noreply.github.com>
+Date:   Thu Sep 5 16:52:57 2024 +0900
+
+    conf: add support for Surface IPTS device
+
+commit fdf6d5a73597bb6962ca7dc89aae6aed5eaf505e
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Wed Sep 4 09:14:57 2024 +1000
+
+    CI: bump to actions/checkout@v4 and actions/setup-python@v5
+
+commit 94c2d331d3cc57d21b61f38985843403e91191a7
+Author: dependabot[bot] <49699333+dependabot[bot]@users.noreply.github.com>
+Date:   Tue Sep 3 22:42:05 2024 +0000
+
+    CI: bump actions/download-artifact to v4
+    
+    Originally suggested by github's dependabot this bumps to
+    download-artifact@v4 for a security issue. That requires bumping to
+    upload-artifact@v4 too. And that in turn requires that we only have one
+    tarball with any given name so we no only generate the tarball from the
+    gcc job.
+
+commit b43c2597e0604980ba66dda46270be40d3da2086
+Author: Jason Gerecke <jason.gerecke@wacom.com>
+Date:   Tue May 28 13:49:36 2024 -0700
+
+    Implement support for devices with two relative wheels / dials
+    
+    Just like how tablets may have two absolute wheels, it also is possible
+    for them to have two relative wheels. This commit extends the
+    WACOM_PROP_WHEELBUTTONS property to reference two new actions:
+    RelWheel2Up and RelWheel2Down. These actions will be triggered in
+    response to horizontal scrolling events from the kernel (positive
+    and negative REL_HWHEEL events, respecitively). The default action
+    for these wheels is sending horizontal mouse scroll events (X11 mouse
+    buttons 7 and 6, respectively).
+    
+    Signed-off-by: Jason Gerecke <jason.gerecke@wacom.com>
+
+commit a418ede89488ecbd2785860ff7ac112e37c6857b
+Author: Jason Gerecke <jason.gerecke@wacom.com>
+Date:   Tue Jul 30 14:43:09 2024 -0700
+
+    Swap the relwheel actions triggered and defaults for vertical scrolling
+    
+    Relative wheel actions are backwards from how the user thinks about them.
+    If you want to get/set the action that occurs when scrolling up, you
+    currently need to work with the REL_WHEEL_DOWN action. This is difficult
+    to explain to users and is also makes the code more difficult to follow.
+    
+    This commit changes the behavior so that programming the REL_WHEEL_UP
+    action actually affects what happens when you physically scroll the
+    wheel up. The behavior is now: physical scroll wheel up -> positive
+    delta from kernel -> REL_WHEEL_UP action -> X11 mouse button 4 ->
+    window scrolls up.
+    
+    Note that this commit will break any xsetwacom scripts that users may
+    have which change the relative wheel actions from their defaults. It
+    would also affect control panels that rely on xsetwacom or configuring
+    the driver directly. We don't expect this to cause significant
+    problems in reality since Wacom has not produced tools with relative
+    wheels in many years and so there are few scripts/control panels to
+    break.
+    
+    Signed-off-by: Jason Gerecke <jason.gerecke@wacom.com>
+
+commit a91168c7c257e7727e9c70cef48d6d6d3d1d926f
+Author: Jason Gerecke <jason.gerecke@wacom.com>
+Date:   Wed Jul 31 15:37:19 2024 -0700
+
+    Recognize the pad in more situations
+    
+    Allow dial and ring events to be recognized as coming from the pad
+    when there are no other better sources of information (for example,
+    BTN_TOOL_* events earlier in the event packet, an ABS_MISC with the
+    information, or a previously-known tool type).
+    
+    This fixes an issue where the pad is not recognized (and events are
+    not generated) if your first interaction is with a relative wheel
+    rather than a button or touchring. The events types matched by this
+    function have an ambiguous source on their own, but other earlier
+    tests would be able to determine the type from other context. If
+    all other context-sensitive tests fail to find a tool type, it is
+    reasonably safe to assume we're looking at a pad.
+    
+    Signed-off-by: Jason Gerecke <jason.gerecke@wacom.com>
+
+commit 7722f2ea1d6e50b26ec273becc8ded901f14590f
+Author: Jason Gerecke <jason.gerecke@wacom.com>
+Date:   Tue May 28 13:41:34 2024 -0700
+
+    Update xsetwacom documentation
+    
+    Updates documentation for some of the button-like parameters. The man
+    page for xsetwacom now lists all button-like parameters and the help
+    page now describes the 2nd absolute wheel properly.
+    
+    Signed-off-by: Jason Gerecke <jason.gerecke@wacom.com>
+
+commit 77adee9c6ef3f2c6c141d16df099c3c996397f81
+Author: Jason Gerecke <jason.gerecke@wacom.com>
+Date:   Wed May 29 13:37:26 2024 -0700
+
+    Clean up function documentation
+    
+    Remove documentation for parameters that are no longer present.
+    
+    Signed-off-by: Jason Gerecke <jason.gerecke@wacom.com>
+
+commit 388cbf8263fe50c79d2e7ff0291f21d1b16861e5
+Author: Jason Gerecke <jason.gerecke@wacom.com>
+Date:   Wed Jul 31 10:42:46 2024 -0700
+
+    Fix log output of pointer arbitration
+    
+    Misplaced newline causes logs some logs to get intermingled.
+    Whichever log follows this one becomes part of the same entry.
+    
+    Signed-off-by: Jason Gerecke <jason.gerecke@wacom.com>
+
+commit 8be74a345eeaa6440d1f315b6836eda58e495ebb
+Author: Jason Gerecke <jason.gerecke@wacom.com>
+Date:   Thu Aug 1 10:44:42 2024 -0700
+
+    Do not log errors due to REL_WHEEL_HI_RES events from kernel
+    
+    High-res events are "expected" from the kernel going forward. We may not
+    support doing anything with them, but we also shouldn't clutter the logs
+    with error messages.
+    
+    Signed-off-by: Jason Gerecke <jason.gerecke@wacom.com>
+
+commit f77696e392e7dff4e5ad6bc989a9fda2fe4fa7db
+Author: Jason Gerecke <jason.gerecke@wacom.com>
+Date:   Wed Jul 31 15:36:31 2024 -0700
+
+    Avoid out-of-bounds array read in usbInitToolType and fix its fallback
+    
+    The usbInitToolType function uses `deriveDeviceTypeFromButtonEvent` as
+    a fallback when it cannot otherwise discover the type of tool being
+    reported in a packet of kernel events. This fallback was intended
+    to be called for each event in the packet by iterating over the
+    `event_ptr` array. The loop is incorrectly implemented, however. Before
+    we get to this point, the value of `event_ptr` would have already been
+    incremented to the end of the list by the deviceTypeFromEvent loop.
+    This means our calls to deriveDeviceTypeFromButtonEvent are accessing
+    data beyond the valid list of events and possibly even beyond the end
+    of the array.
+    
+    To fix this, we can replace the pointer arithmetic in both loops with
+    array index notation instead.
+    
+    Fixes: 3eacea1058ef ("Attempt to derive the tool type from a known button/key event")
+    Signed-off-by: Jason Gerecke <jason.gerecke@wacom.com>
+
+commit 4e1d6d61bef5154d66ef0116ef70a817ce21857e
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Wed Jul 31 11:35:29 2024 +1000
+
+    conf: add huion and xp-pen to our default snippet
+    
+    These tablets are supported provided the right kernel driver is loaded,
+    so let's add them by default instead of requiring every user to
+    write a config snippet .
+
+commit f70c7dee7cef4b703801597fc49cd701d82d37ac
+Author: Tatsunosuke Tobita <tatsunosuke.tobita@wacom.com>
+Date:   Mon Jun 24 14:04:42 2024 +0900
+
+    man: add the description for ResetArea option (#346)
+    
+    ResetArea is an option already available in xf86-input-wacom.
+    And it is the reciprocal option to Area option.
+    
+    Signed-off-by: Tatsunosuke Tobita <tatsunosuke.tobita@wacom.com>
+
+commit bc795e97a7c145704bad7e34cc3948d00dd60574
+Author: Tatsunosuke Tobita <tatsunosuke.tobita@wacom.com>
+Date:   Wed Jun 12 12:31:26 2024 +0900
+
+    man: remove texts related to InputDevice (#345)
+    
+    Since xorg fully started to rely on hotplugging over decade,
+    modern tablet devices can be automatically detected.
+    This commit removes "Section InputDevice" related texts, which
+    is used when hotplugging is disabled.
+    
+    Also, it replaces all "5X' to "5" to describe the proper references while
+    we're here.
+    
+    Signed-off-by: Tatsunosuke Tobita <tatsunosuke.tobita@wacom.com>
+
+commit 418e38f5b5abd823dcc4d68f1009ea48fb936324
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Mon Apr 15 14:56:16 2024 +1000
+
+    xf86-input-wacom 1.2.2
+    
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit d55788137c84594754f1d46e4828fa3b8d773368
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Wed Apr 10 11:46:10 2024 +1000
+
+    Fix wcmForeachDevice check in wcmMatchDevice
+    
+    wcmForeachDevice returns 0 for no matches, a negative errno or the
+    greater-than-zero number of matches. In wcmMatchDevice we return either
+    0 or 1 as matchDevice() stops the foreach once the first match is
+    encountered.
+    
+    Fixes: d5ca999f35c7 ("Add a helper function to iterate over local devices to the driver layer")
+    Closes #342
+
+commit f4241514b725377e03ad55b4dbe8750cd3e4e5f4
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Mon Mar 11 10:43:17 2024 +1000
+
+    release.sh: Drop the ancient x"foo" != x comparisons
+    
+    These haven't been needed in decades. Where a string may be empty use
+    quotes, otherwise let's switch string comparisons to just that. And
+    where we check for empty/nonempty use -z/-n.
+
+commit 45e01b7506e075cdb61f514aea065ab28f44e090
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Mon Mar 11 10:37:35 2024 +1000
+
+    release.sh: drop --force and --moduleset
+    
+    No longer hooked into anything so let's not pretend we have it.
+
+commit 29e27f27401fc2a18f8feabc09959cae38cc11ab
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Mon Mar 11 10:36:34 2024 +1000
+
+    release.sh: default to '.' if no module was given
+    
+    Might as well since we only ever release one module at a time with this
+    script.
+
+commit 564e034166141976ba9e88de098043bf6bc73046
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Mon Mar 11 10:33:17 2024 +1000
+
+    release.sh: update to take a --token value (#340)
+    
+    Apparently the old way no longer works, so let's update with a
+    copy/paste from the examples.
+    
+    Intentional switch to use --token because that's how you should be doing
+    releases anyway - with a temporary token that can be revoked after the
+    release is complete (and that also encodes the username).
+    
+    https://docs.github.com/en/rest/releases/releases?apiVersion=2022-11-28#create-a-release
+
+commit d73eb2ee78670cc2b1d7cc3861f466867ccba479
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Mon Mar 4 09:33:07 2024 +1000
+
+    wacom 1.2.1
+    
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 3ce73a61a17ca1cbb222c67c0c803a7e40d0b993
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Tue Feb 20 10:52:25 2024 +1000
+
+    meson.build: allow disabling the xsetwacom build
+    
+    xsetwacom pulls in the xorgproto and Xlib dependencies, so let's make
+    this optional for the (niche) case of where we really only want the
+    driver built.
+    
+    Since this is a rather niche case let's make it a boolean true/false
+    option instead of a feature with "auto".
+
+commit 6f8ed055c655fdd3a0f91870817864ecd81c4d8a
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Thu Feb 29 15:04:18 2024 +1000
+
+    CI: bump our containers to use Ubuntu 22.04
+
+commit f963825e9a2ff531ca16e36408a42c8e2b9e48c3
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Fri Dec 1 09:16:21 2023 +1000
+
+      wcmUSB: fix undefined behavior for bit-shifting
+    
+    Automated test runs have detected the following issue while running UBSan
+    checks:
+    
+    ~~~
+    ../src/wcmUSB.c:1372:11: runtime error: left shift of 1 by 31 places cannot
+     be represented in type 'int'
+            #0 0x7f0444bcbd8c in mod_buttons ../src/wcmUSB.c:1372
+            #1 0x7f0444bd7f26 in test_mod_buttons ../src/wcmUSB.c:2090
+            #2 0x7f0444bfcea7 in wcm_run_tests ../test/wacom-test-suite.c:46
+            #3 0x56204d77b405 in main ../test/wacom-tests.c:44
+            #4 0x7f0448625082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082)
+            #5 0x56204d77b1cd in _start (/home/runner/work/xf86-input-wacom/xf86-input-wacom/builddir/wacom-tests+0x11cd)
+    
+    SUMMARY: UndefinedBehaviorSanitizer: undefined-behavior ../src/wcmUSB.c:1372:11 in
+    
+    The default type of a literal `1` is `int` and thus a leftshift of 31 is
+    not permitted. Switch it to `1u` and thus `unsigned int` for Button 31
+    which is the max button we support (if zero-indexed).
+    
+    Link: https://github.com/linuxwacom/xf86-input-wacom/actions/runs/7049012015/job/19186502078
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 73f66d42d72c2c758c09acab84b13dab065886d3
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Fri Dec 1 09:14:11 2023 +1000
+
+    Revert "wcmUSB: Correct bounds check of maximum button number"
+    
+    This fixed the wrong issue, the undefined behavior was caused by
+    (1 << btn) defaulting to int rather than unsigned int. See the follow-up
+    commit for a fix.
+    
+    This reverts commit bf61b3e22b2bb25dc9aed76103488eb7ebc47bb5.
+
+commit bf61b3e22b2bb25dc9aed76103488eb7ebc47bb5
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Thu Nov 30 08:02:08 2023 -0800
+
+    wcmUSB: Correct bounds check of maximum button number
+    
+    Automated test runs have detected the following issue while running UBSan
+    checks:
+    
+    ~~~
+    ../src/wcmUSB.c:1372:11: runtime error: left shift of 1 by 31 places cannot
+     be represented in type 'int'
+        #0 0x7f0444bcbd8c in mod_buttons ../src/wcmUSB.c:1372
+        #1 0x7f0444bd7f26 in test_mod_buttons ../src/wcmUSB.c:2090
+        #2 0x7f0444bfcea7 in wcm_run_tests ../test/wacom-test-suite.c:46
+        #3 0x56204d77b405 in main ../test/wacom-tests.c:44
+        #4 0x7f0448625082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082)
+        #5 0x56204d77b1cd in _start (/home/runner/work/xf86-input-wacom/xf86-input-wacom/builddir/wacom-tests+0x11cd)
+    
+    SUMMARY: UndefinedBehaviorSanitizer: undefined-behavior ../src/wcmUSB.c:1372:11 in
+    
+    ~~~
+    
+    While the faulty line has some protection against an excessively-large
+    value of 'btn', the bounds are incorrect. A button number of 32 would
+    be allowed by the existing check but would also lead to undefined
+    behavior.
+    
+    This commit modifies the bounds to properly fit the condition.
+    
+    Link: https://github.com/linuxwacom/xf86-input-wacom/actions/runs/7049012015/job/19186502078
+    Signed-off-by: Jason Gerecke <jason.gerecke@wacom.com>
+
+commit dbb8ddce94b7bfe416dd88b6ea286538940d9d38
+Author: Jason Gerecke <killertofu@gmail.com>
+Date:   Thu Nov 30 07:47:43 2023 -0800
+
+    github: Minimize permissions granted to automated workflows / jobs
+    
+    Jobs that use the GITHUB_TOKEN to perform sensitive actions on behalf of
+    a real user may be granted a range of permissions. Instead of granting
+    blanket permissions to read and write "all" APIs, we should really limit
+    the permissions what any individual workflow or job can do.
+    
+    This commit sets the default permissions for each workflow to "contents:
+    read", which allows jobs to only read from the repository.
+    
+    Link: https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#jobsjob_idpermissions
+    Signed-off-by: Jason Gerecke <jason.gerecke@wacom.com>
+
+commit 3d3b474a750106f8db7c47d0088209f8ec3ae1c4
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Tue Nov 14 14:02:48 2023 +1000
+
+    Add a pressurecurve debugging tool
+    
+    This tool takes (one or multiple) sets of 4 coordinate that represent
+    the second and third point for our pressure curve (first and fourth
+    points are hardcoded to 0/0 and 1/1 like the driver does)
+    
+    It spits out gnuplot-compatible lines that can be printed for visual
+    debugging. Usage to print the GNOME default curves:
+    
+    ./build/pressurecurve \
+        0 .75 .25 1 \
+        0 .5 .5 1  \
+        0 .25 .75 1 \
+        0 0 1 1 \
+        .25 0 1 .75 \
+        .5 0 1 .5 \
+        .75 0 1 .25 > gnuplot.data
+    
+    And that gnuplot data can then be printed with:
+    
+     #!/usr/bin/gnuplot
+     set terminal qt persist
+     set style data lines
+     set xrange [0:1]
+     set yrange [0:1]
+     plot \
+      "gnuplot.data" using 1:2 title "  0, .75, .25, 1", \
+      "gnuplot.data" using 1:3 title "  0, .50, .50, 1", \
+      "gnuplot.data" using 1:4 title "  0, .25, .75, 1", \
+      "gnuplot.data" using 1:5 title "  0,   0,   1, 1", \
+      "gnuplot.data" using 1:6 title ".25, 0,   1, .75", \
+      "gnuplot.data" using 1:7 title ".50, 0,   1, .50", \
+      "gnuplot.data" using 1:8 title ".75, 0,   1, .25"
+
+commit 2612afb19e37fed69f3aca534d213a0d7e71b595
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Tue Nov 14 12:31:50 2023 +1000
+
+    Move the pressurecurve calculation into a separate file
+    
+    There's nothing driver-specific about this and it allows us to test it
+    separately or write tools to test it.
+
+commit 55a10e392f7337da0dfcc19a60f816aa7645f2df
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Mon May 29 11:15:45 2023 +1000
+
+    Add option SmoothPanscrollingEnabled
+    
+    This is a backwards-compatibility option similar to the Pressure2K
+    option. GDK2 applications are effectively limited to 7 axes
+    (value of GDK_AXES_LAST in GDK2) and adding smooth panscrolling gives
+    our device 8 axes total. This can cause issues when the driver, GDK and
+    the application don't agree on the number of axes in the device.
+    
+    This is an application/GDK bug but as for the Pressure2K option we
+    expect there to be applications that cannot be updated easily. To work
+    around this, provide a driver option to disable this new feature
+    altogether and effectively return to 6 axes for the pen device.
+    
+    This is a partial revert of fe923e927a "Implement smooth panscrolling"
+    for the implementation. Minor changes though, the implementation now
+    relies more on local variables than pointers.
+    
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 815edf68875193d254f12dbf7e0f944dccbbd6c1
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Thu Jun 15 13:10:06 2023 +1000
+
+    test: parametrize the scroll test for vert + horiz scrolling
+    
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 692aa3b04916af3aad7b84131e1475d141f6d899
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Mon May 29 11:21:23 2023 +1000
+
+    x11: don't post motion/proximity events with an empty valuator mask
+    
+    After converting from our internal axis types to the x11 valuators we
+    may (theoretically) be left with an empty valuator mask. Let's not post
+    events in that case.
+    
+    This is a theoretical issue for now.
+    
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit d0e1fee6bbdadfd8aa76a46e87a29fb689817fc3
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Mon May 29 11:15:51 2023 +1000
+
+    Remove some unnecessary empty lines
+    
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit ca34daadc486217cfe5463237b42035146339cff
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Mon May 29 11:10:43 2023 +1000
+
+    Remove a confusing comment
+    
+    We clip to 6 axis here, so having a comment that lists 8 axes is not
+    overly useful.
+    
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 3bde61c986ca7c1c373edd5ba4844ca6550fdbb8
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Tue Jun 6 14:30:09 2023 +1000
+
+    release.sh: drop support for modfiles and module sets
+    
+    Leftover from the xorg release.sh script, no longer needed here since we
+    only ever release one module at a time.
+    
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+
+commit 991660b38caf40aeaa8dd6e59c6b554b12c761da
+Author: Peter Hutterer <peter.hutterer@who-t.net>
+Date:   Mon May 29 09:38:14 2023 +1000
+
+    man: remove some unnecessary indent
+    
+    All our options were indented by an extra 4 units, unnecessary since we
+    use TP for all of those anyway and get a highlight.
+    
+    Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
+
 commit 8f655fe3faabc4a44a32504d0ef14fc961f803fb
 Author: Peter Hutterer <peter.hutterer@who-t.net>
 Date:   Thu Apr 6 11:17:09 2023 +1000
@@ -3125,7 +3669,7 @@ Date:   Mon Nov 22 09:35:21 2021 +1000
     Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
 
 commit 4865f088a20a568908241664dfa406b42d003f03
-Merge: 32e21fe9 d0d28821
+Merge: 32e21fe d0d2882
 Author: Ping Cheng <pinglinux@gmail.com>
 Date:   Fri Nov 19 14:53:28 2021 -0800
 
@@ -3453,7 +3997,7 @@ Date:   Mon Sep 21 07:40:38 2020 +0000
     Adding ppc64le architecture to support on travis-ci
 
 commit a4372a2e6083312defc9eef2806ebea98f02fa1a
-Merge: 095ba9c4 304ee7ee
+Merge: 095ba9c 304ee7e
 Author: Jason Gerecke <jason.gerecke@wacom.com>
 Date:   Mon Aug 3 08:26:00 2020 -0700
 
@@ -3490,7 +4034,7 @@ Date:   Fri Dec 20 10:42:31 2019 -0800
     Signed-off-by: Jason Gerecke <killertofu@gmail.com>
 
 commit a3b03e8638c037132fdf0927c7e488ec80967a5c
-Merge: 3b338312 a2f52bd6
+Merge: 3b33831 a2f52bd
 Author: Jason Gerecke <jason.gerecke@wacom.com>
 Date:   Mon Dec 16 13:01:39 2019 -0800
 
@@ -3512,7 +4056,7 @@ Date:   Fri Dec 6 11:26:51 2019 -0800
     Signed-off-by: Jason Gerecke <jason.gerecke@wacom.com>
 
 commit 3b338312eb275f2d9a602805931fa47d863a0209
-Merge: b40122dd 5113d183
+Merge: b40122d 5113d18
 Author: Jason Gerecke <jason.gerecke@wacom.com>
 Date:   Mon Nov 4 09:14:40 2019 -0800
 
@@ -3548,7 +4092,7 @@ Date:   Mon Sep 23 14:29:09 2019 -0700
     Signed-off-by: Jason Gerecke <jason.gerecke@wacom.com>
 
 commit b40122dd49ca2cdd2d2608f30e5340d5c963187d
-Merge: 17028f68 2a7af307
+Merge: 17028f6 2a7af30
 Author: Jason Gerecke <jason.gerecke@wacom.com>
 Date:   Wed Oct 23 13:50:18 2019 -0700
 
@@ -3596,7 +4140,7 @@ Date:   Wed Oct 9 14:25:21 2019 -0700
     Signed-off-by: Jason Gerecke <killertofu@gmail.com>
 
 commit 76878df9a7bbcead2375a19fd1683f830e6941bb
-Merge: 3a4b9613 af2fafdf
+Merge: 3a4b961 af2fafd
 Author: Jason Gerecke <jason.gerecke@wacom.com>
 Date:   Wed Oct 9 14:04:22 2019 -0700
 
@@ -3668,7 +4212,7 @@ Date:   Mon Sep 9 15:32:17 2019 -0700
     Signed-off-by: Jason Gerecke <jason.gerecke@wacom.com>
 
 commit 3a4b96139e27a593c869fe28999211d6c90142eb
-Merge: ef943197 3eb70aeb
+Merge: ef94319 3eb70ae
 Author: Jason Gerecke <jason.gerecke@wacom.com>
 Date:   Thu Sep 12 15:07:01 2019 -0700
 
@@ -3689,7 +4233,7 @@ Date:   Tue Sep 10 21:40:58 2019 -0400
     Signed-off-by: Ping Cheng <ping.cheng@wacom.com>
 
 commit ef943197cc912f782412dcbe02aac92a8fb4d61f
-Merge: 0ac49a26 a38074dc
+Merge: 0ac49a2 a38074d
 Author: Jason Gerecke <jason.gerecke@wacom.com>
 Date:   Mon Sep 9 14:43:45 2019 -0700
 
@@ -3875,7 +4419,7 @@ Date:   Fri Jun 15 14:28:23 2018 -0700
     Signed-off-by: Jason Gerecke <jason.gerecke@wacom.com>
 
 commit 0ac49a26d25279b7777239066aff8e1f5f23bd4b
-Merge: 299e830b bde3339e
+Merge: 299e830 bde3339
 Author: Jason Gerecke <jason.gerecke@wacom.com>
 Date:   Tue Sep 3 13:29:39 2019 -0700
 
@@ -3980,7 +4524,7 @@ Date:   Thu Jan 17 13:44:37 2019 +1000
     Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
 
 commit daafdda6e90d9c36ad8f56be1f03d0b402595f30
-Merge: 4e065272 6a951297
+Merge: 4e06527 6a95129
 Author: Jason Gerecke <jason.gerecke@wacom.com>
 Date:   Mon Jul 29 11:51:45 2019 -0700
 
@@ -3989,7 +4533,7 @@ Date:   Mon Jul 29 11:51:45 2019 -0700
     Remove and replace references to Sourceforge
 
 commit 4e065272eaed6ab27fe17627712fdb7ecd697fa5
-Merge: 2248962c 030d272d
+Merge: 2248962 030d272
 Author: Jason Gerecke <jason.gerecke@wacom.com>
 Date:   Tue Jul 16 10:29:05 2019 -0700
 
@@ -4018,7 +4562,7 @@ Date:   Mon Jul 15 01:36:27 2019 -0700
     Signed-off-by: Lance Geroso  <gero3977@gmail.com>
 
 commit 2248962cf15334c6f61a82ab4efedfcd2e85a741
-Merge: b164be0e 5089f0c8
+Merge: b164be0 5089f0c
 Author: Ping Cheng <pinglinux@gmail.com>
 Date:   Thu Jun 20 16:06:35 2019 -0700
 
@@ -4064,7 +4608,7 @@ Date:   Mon Jun 17 14:18:09 2019 -0700
     Signed-off-by: Aaron Armstrong Skomra <aaron.skomra@wacom.com>
 
 commit a3e880ec34e7e9ef01098a899a4b1eb113b82b51
-Merge: 5fc2d91e 36573965
+Merge: 5fc2d91 3657396
 Author: Ping Cheng <pinglinux@gmail.com>
 Date:   Wed Jun 12 13:11:10 2019 -0700
 
@@ -4073,7 +4617,7 @@ Date:   Wed Jun 12 13:11:10 2019 -0700
     Fix issues with Microsoft Surface Go tablet
 
 commit 5fc2d91ead58c8a5ae38f5cfe92de1d214aba5d7
-Merge: d0a68b87 dbb07c56
+Merge: d0a68b8 dbb07c5
 Author: Ping Cheng <pinglinux@gmail.com>
 Date:   Wed May 29 12:06:04 2019 -0700
 
@@ -7451,7 +7995,7 @@ Date:   Wed Mar 19 15:36:51 2014 -0700
     Signed-off-by: Jason Gerecke <killertofu@gmail.com>
 
 commit 3deb7c7a3b001f1178cfb339efc5e3d6d8de181a
-Merge: 084ee1f4 c49463f7
+Merge: 084ee1f c49463f
 Author: Peter Hutterer <peter.hutterer@who-t.net>
 Date:   Thu Mar 20 08:23:56 2014 +1000
 
@@ -9763,7 +10307,7 @@ Date:   Fri Feb 10 11:29:45 2012 -0800
     Signed-off-by: Jason Gerecke <killertofu@gmail.com>
 
 commit 9f32b03930802040ba1001258d824aefafd003d0
-Merge: 1a8db01e 7a875941
+Merge: 1a8db01 7a87594
 Author: Peter Hutterer <peter.hutterer@who-t.net>
 Date:   Fri Jul 13 16:17:39 2012 +1000
 
@@ -10399,7 +10943,7 @@ Date:   Fri Mar 2 07:24:17 2012 +1000
     Reviewed-by: Jason Gerecke <killertofu@gmail.com>
 
 commit 60b4c868ac5baf5dba82c8c9146dfac068c06eef
-Merge: e7564c94 28abd26b
+Merge: e7564c9 28abd26
 Author: Jason Gerecke <killertofu@gmail.com>
 Date:   Thu Mar 1 09:48:50 2012 -0800
 
@@ -11271,7 +11815,7 @@ Date:   Fri Sep 9 08:36:33 2011 +1000
     Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
 
 commit fb11287b1ca76a838e2fdde67d6267d8dd5979b4
-Merge: 25961658 a9c7b56a
+Merge: 2596165 a9c7b56
 Author: Peter Hutterer <peter.hutterer@who-t.net>
 Date:   Thu Sep 8 14:14:39 2011 +1000
 
@@ -11682,7 +12226,7 @@ Date:   Fri Jul 1 09:14:50 2011 +1000
     Reviewed-by: Ping Cheng <pinglinux@gmail.com>
 
 commit aa4e458e50150bfc976afcb32034f0a30a404bf1
-Merge: f8e6ccc0 a8829f06
+Merge: f8e6ccc a8829f0
 Author: Peter Hutterer <peter.hutterer@who-t.net>
 Date:   Thu Jun 30 16:22:53 2011 +1000
 
@@ -11716,7 +12260,7 @@ Date:   Sat Jun 25 12:07:12 2011 -0500
     Signed-off-by: Chris Bagwell <chris@cnpbagwell.com>
 
 commit f8e6ccc0a494d6bf82afbd81698baa2f78436cd6
-Merge: 006bc892 7fe557d4
+Merge: 006bc89 7fe557d
 Author: Peter Hutterer <peter.hutterer@who-t.net>
 Date:   Wed Jun 29 08:54:16 2011 +1000
 
@@ -12213,7 +12757,7 @@ Date:   Mon Apr 18 11:26:40 2011 -0700
     Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
 
 commit 74a53cf8aa9ded9978d8f085446871d266dd4bf4
-Merge: 0d7790b8 ec23bdd0
+Merge: 0d7790b ec23bdd
 Author: Peter Hutterer <peter.hutterer@who-t.net>
 Date:   Tue Apr 19 16:04:25 2011 +1000
 
@@ -13609,7 +14153,7 @@ Date:   Fri Mar 11 09:30:45 2011 +1000
     Reviewed-by: Chris Bagwell <chris@cnpbagwell.com>
 
 commit a3b6e2079155c5774baabcd9e3c53b3336536e49
-Merge: 43c82c31 69d3e938
+Merge: 43c82c3 69d3e93
 Author: Peter Hutterer <peter.hutterer@who-t.net>
 Date:   Mon Mar 14 15:42:00 2011 +1000
 
@@ -13646,7 +14190,7 @@ Date:   Fri Mar 11 10:53:51 2011 +1000
     Acked-by: Ping Cheng <pinglinux@gmail.com>
 
 commit abfcc2ac187a4a7131503c0aa80e166ca384034e
-Merge: 857ef815 90ba0505
+Merge: 857ef81 90ba050
 Author: Peter Hutterer <peter.hutterer@who-t.net>
 Date:   Fri Mar 11 09:31:23 2011 +1000
 
@@ -13922,7 +14466,7 @@ Date:   Mon Mar 7 14:16:55 2011 +1000
     Acked-by: Ping Cheng <pinglinux@gmail.com>
 
 commit c4007437dcd7b24d949b80fb49e5e8e0699b4201
-Merge: a8c95a79 abb4144f
+Merge: a8c95a7 abb4144
 Author: Peter Hutterer <peter.hutterer@who-t.net>
 Date:   Mon Mar 7 13:11:56 2011 +1000
 
@@ -14452,7 +14996,7 @@ Date:   Fri Feb 18 12:05:30 2011 -0500
     Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
 
 commit b667dd01313bfbc5c76326de61d7fc659076581c
-Merge: 244b5ad8 79b3945d
+Merge: 244b5ad 79b3945
 Author: Peter Hutterer <peter.hutterer@who-t.net>
 Date:   Fri Feb 18 10:07:06 2011 +1000
 
@@ -14667,14 +15211,14 @@ Date:   Wed Feb 9 12:38:00 2011 -0600
     Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
 
 commit 0f9a1371a2498e0c74ecdf381d28b5bc3adfaa25
-Merge: 32babb0c b49d98a2
+Merge: 32babb0 b49d98a
 Author: Peter Hutterer <peter.hutterer@who-t.net>
 Date:   Thu Feb 10 13:12:47 2011 +1000
 
     Merge branch 'test-suite'
 
 commit 32babb0c89db59a73890ae5a989b65fd128486f5
-Merge: bf9ba5f1 868d768e
+Merge: bf9ba5f 868d768
 Author: Peter Hutterer <peter.hutterer@who-t.net>
 Date:   Wed Feb 9 09:51:54 2011 +1000
 
@@ -15579,7 +16123,7 @@ Date:   Tue Jan 11 19:34:04 2011 -0600
     Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
 
 commit d00f555a73c7b0e0ba86fc4c88593441fe7cb107
-Merge: e9acf402 b46c5fc0
+Merge: e9acf40 b46c5fc
 Author: Peter Hutterer <peter.hutterer@who-t.net>
 Date:   Wed Jan 12 10:03:39 2011 +1000
 
@@ -15831,7 +16375,7 @@ Date:   Tue Dec 28 19:10:01 2010 -0600
     Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
 
 commit 13734c86be023f2a26c586458e191f2127343a7c
-Merge: 0f20c2c7 44c6f74b
+Merge: 0f20c2c 44c6f74
 Author: Peter Hutterer <peter.hutterer@who-t.net>
 Date:   Fri Jan 7 11:15:11 2011 +1000
 
@@ -15922,7 +16466,7 @@ Date:   Thu Dec 23 10:48:50 2010 +1000
     Reviewed-by: Gaetan Nadon <memsize@videotron.ca>
 
 commit 68351dab43e800b503025ef2f06c794d40bc259b
-Merge: 2b9eb3db 6f5f29b4
+Merge: 2b9eb3d 6f5f29b
 Author: Peter Hutterer <peter.hutterer@who-t.net>
 Date:   Tue Dec 21 16:59:52 2010 +1000
 
@@ -17043,7 +17587,7 @@ Date:   Thu Nov 4 20:01:41 2010 -0500
     Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
 
 commit 791de526725abebfa33e1b41097c3e60b500f7f1
-Merge: fd618588 c6dcc3a1
+Merge: fd61858 c6dcc3a
 Author: Peter Hutterer <peter.hutterer@who-t.net>
 Date:   Thu Nov 4 09:21:53 2010 +1000
 
@@ -17092,7 +17636,7 @@ Date:   Wed Nov 3 14:29:58 2010 +1000
     Acked-by: Jon Neal <reportingsjr@gmail.com>
 
 commit 75bfb52f6c36afe9354061de92538c7966d784b9
-Merge: ab71355f 09445a03
+Merge: ab71355 09445a0
 Author: Peter Hutterer <peter.hutterer@who-t.net>
 Date:   Fri Oct 29 15:25:26 2010 +1000
 
@@ -17205,7 +17749,7 @@ Date:   Thu Oct 28 10:08:37 2010 +1000
     Reviewed-by: Chris Bagwell <chris@cnpbagwell.com>
 
 commit 8d69f6ec166e6165652ec2379a6c9405d5607278
-Merge: f27cb29c cdfedc95
+Merge: f27cb29 cdfedc9
 Author: Peter Hutterer <peter.hutterer@who-t.net>
 Date:   Thu Oct 28 14:49:03 2010 +1000
 
@@ -18072,7 +18616,7 @@ Date:   Mon Aug 9 11:38:17 2010 +1000
     Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
 
 commit 0ff60c02ed5e3e0b16cc3b214e6d81890cc706f7
-Merge: 9f5a39c5 3299bf3b
+Merge: 9f5a39c 3299bf3
 Author: Peter Hutterer <peter.hutterer@who-t.net>
 Date:   Mon Aug 9 10:39:04 2010 +1000
 
@@ -18416,7 +18960,7 @@ Date:   Mon Jul 26 14:39:29 2010 +1000
     Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
 
 commit d45d6dbaefe03b466a9a631f400d8e252efbb754
-Merge: bcc477d0 03a1f3cc
+Merge: bcc477d 03a1f3c
 Author: Peter Hutterer <peter.hutterer@who-t.net>
 Date:   Mon Jul 26 14:33:09 2010 +1000
 
@@ -18727,7 +19271,7 @@ Date:   Fri Jul 16 14:27:20 2010 +1000
     Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
 
 commit fc649a2f7c5ee774974481d9c4ea46460f7a402f
-Merge: 00f56eda ef45111b
+Merge: 00f56ed ef45111
 Author: Peter Hutterer <peter.hutterer@who-t.net>
 Date:   Wed Jul 14 13:01:10 2010 +1000
 
@@ -18966,7 +19510,7 @@ Date:   Thu Jul 1 20:54:23 2010 -0400
     Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
 
 commit e7bbe77a021a379756957fdb8d722092826e365e
-Merge: b97a6702 ef82a62b
+Merge: b97a670 ef82a62
 Author: Peter Hutterer <peter.hutterer@who-t.net>
 Date:   Thu Jun 24 15:21:43 2010 +1000
 
@@ -19661,7 +20205,7 @@ Date:   Wed Jun 9 10:33:55 2010 +1000
     Reviewed-by: Ping Cheng <pinglinux@gmail.com>
 
 commit 52d95845b0912cc4d72c6abcb99fc4bed82e489e
-Merge: fb46bef0 b42bdad2
+Merge: fb46bef b42bdad
 Author: Peter Hutterer <peter.hutterer@who-t.net>
 Date:   Thu Jun 10 15:09:02 2010 +1000
 
@@ -19799,7 +20343,7 @@ Date:   Tue May 18 20:35:53 2010 +0100
     Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
 
 commit 0862aa3d74378abbf9f23289ab864a4d07305d0d
-Merge: 370cd8bc 7581a5f6
+Merge: 370cd8b 7581a5f
 Author: Peter Hutterer <peter.hutterer@who-t.net>
 Date:   Thu Jun 3 14:02:37 2010 +1000
 
@@ -20118,7 +20662,7 @@ Date:   Mon May 31 14:41:53 2010 +1000
     Reviewed-by: Ping Cheng <pinglinux@gmail.com>
 
 commit a36262f30418c5b57d9dd21aafe0b95d81bbf7d7
-Merge: 6569c057 8916bf83
+Merge: 6569c05 8916bf8
 Author: Peter Hutterer <peter.hutterer@who-t.net>
 Date:   Mon May 31 10:54:56 2010 +1000
 
@@ -21104,7 +21648,7 @@ Date:   Thu Mar 18 20:57:54 2010 -0500
     Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
 
 commit 3055024b89c5b274a6c7d2cf128ec390fe0ffad3
-Merge: fb458cab 70e490a5
+Merge: fb458ca 70e490a
 Author: Peter Hutterer <peter.hutterer@who-t.net>
 Date:   Fri Mar 19 11:36:28 2010 +1000
 
@@ -21237,7 +21781,7 @@ Date:   Tue Mar 16 14:16:09 2010 +1000
     Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
 
 commit 6f98912927116fcf0067e30f010778b0e838f268
-Merge: 4c2d47db d8d70c12
+Merge: 4c2d47d d8d70c1
 Author: Peter Hutterer <peter.hutterer@who-t.net>
 Date:   Tue Mar 16 16:03:32 2010 +1000
 
@@ -21471,7 +22015,7 @@ Date:   Mon Mar 1 13:45:56 2010 +1000
     Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
 
 commit 836d30f6eee0e82b7ef874de0deb491ec0b17645
-Merge: 701521e9 c1457421
+Merge: 701521e c145742
 Author: Peter Hutterer <peter.hutterer@who-t.net>
 Date:   Mon Mar 1 09:58:09 2010 +1000
 
@@ -22983,7 +23527,7 @@ Date:   Mon Dec 14 16:14:56 2009 +1000
     Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
 
 commit 70a1a852f62d9439cbd3ca09ca500cc95716d88a
-Merge: bffe7c23 3977da27
+Merge: bffe7c2 3977da2
 Author: Peter Hutterer <peter.hutterer@who-t.net>
 Date:   Mon Dec 14 09:01:42 2009 +1000
 
@@ -24570,7 +25114,7 @@ Date:   Sun Oct 18 16:06:33 2009 -0700
     Signed-off-by: Peter Hutterer <peter.hutterer@who-t.net>
 
 commit 10e0036f5b398b08ddddcea1ace534e1188e1abe
-Merge: afdf5565 3718c605
+Merge: afdf556 3718c60
 Author: Peter Hutterer <peter.hutterer@who-t.net>
 Date:   Wed Oct 14 10:51:29 2009 +1000
 

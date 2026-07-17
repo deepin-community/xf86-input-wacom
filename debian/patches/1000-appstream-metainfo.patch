@@ -1,0 +1,44 @@
+Description: Added AppStream metainfo XML with hardware provide info.
+ This allow isenkram to propose this package when the USB printer is
+ present.
+Author: Petter Reinholdtsen
+Forwarded: no
+Last-Update: 2024-07-15
+---
+Index: xf86-input-wacom-salsa/Makefile.am
+===================================================================
+--- xf86-input-wacom-salsa.orig/Makefile.am	2024-07-16 17:33:41.523740121 +0200
++++ xf86-input-wacom-salsa/Makefile.am	2024-07-16 17:33:41.519740075 +0200
+@@ -37,8 +37,12 @@
+              meson_options.txt \
+              autogen.sh \
+              README.md \
++             io.github.linuxwacom.metainfo.xml \
+              $(NULL)
+ 
++dist_metainfo_DATA = io.github.linuxwacom.metainfo.xml
++metainfodir = $(datarootdir)/metainfo
++
+ .PHONY: ChangeLog INSTALL FORCE
+ 
+ INSTALL:
+Index: xf86-input-wacom-salsa/io.github.linuxwacom.metainfo.xml
+===================================================================
+--- /dev/null	1970-01-01 00:00:00.000000000 +0000
++++ xf86-input-wacom-salsa/io.github.linuxwacom.metainfo.xml	2024-07-16 17:34:28.036265423 +0200
+@@ -0,0 +1,15 @@
++<?xml version="1.0" encoding="UTF-8"?>
++<component>
++  <id>io.github.linuxwacom</id>
++  <metadata_license>MIT</metadata_license>
++  <project_license>GPL-2.0+</project_license>
++  <name>xserver-xorg-input-wacom</name>
++  <summary>X.Org X server -- Wacom input driver</summary>
++  <description>
++    <p>This package provides the X.Org driver for Wacom tablet devices.</p>
++  </description>
++  <url type="homepage">https://github.com/philpem/printer-driver-ptouch</url>
++  <provides>
++    <modalias>lkmodule:wacom</modalias>
++  </provides>
++</component>
